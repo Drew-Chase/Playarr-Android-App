@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "Playarr TV"
 include(":mobile")
 include(":tv")
+include(":commonlib")
