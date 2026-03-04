@@ -2,10 +2,12 @@ package com.github.drewchase.playarr.screens
 
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +16,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -35,10 +46,12 @@ import com.github.drewchase.playarr.ui.theme.TvPreviews
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val TAG = "PlayarrFocus"
+
 class DashboardScreen {
     @RequiresApi(Build.VERSION_CODES.M)
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
-    @OptIn(ExperimentalTvMaterial3Api::class)
+    @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
     @TvPreviews
     @Composable
     fun View() {
@@ -53,6 +66,10 @@ class DashboardScreen {
         val imageLoader = remember { createPlayarrImageLoader(context, config.authToken) }
         val dashboardState = remember { mutableStateOf(DashboardState()) }
         val showSearch = remember { mutableStateOf(false) }
+
+        // FocusRequesters for explicit nav <-> carousel wiring
+        val carouselFocusRequester = remember { FocusRequester() }
+        val navBarFocusRequester = remember { FocusRequester() }
 
         // Load data on first composition
         LaunchedEffect(Unit) {
@@ -91,135 +108,158 @@ class DashboardScreen {
                     }
                 }
                 else -> {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Content FIRST in composition — gets initial focus.
-                        // No focusGroup/focusRequester/focusProperties — let spatial
-                        // D-pad navigation handle everything naturally.
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(24.dp),
-                            contentPadding = PaddingValues(bottom = 48.dp),
-                        ) {
-                            // Hero Carousel
-                            val heroItems = state.heroItems()
+                    val heroItems = state.heroItems()
+                    Log.d(TAG, "DashboardScreen: composing main content — " +
+                            "heroItems=${heroItems.size}, " +
+                            "watching=${state.watchingItems().size}, " +
+                            "recentMovies=${state.recentMovies().size}, " +
+                            "recentShows=${state.recentShows().size}")
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .onFocusChanged { focusState ->
+                                Log.d(TAG, "DashboardScreen(Box): onFocusChanged — " +
+                                        "isFocused=${focusState.isFocused}, " +
+                                        "hasFocus=${focusState.hasFocus}")
+                            }
+                    ) {
+                        // Main content: Carousel (fixed) + scrollable rows below
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Hero Carousel — OUTSIDE LazyColumn so focus system can see it
                             if (heroItems.isNotEmpty()) {
-                                item {
-                                    HeroCarousel(
-                                        items = heroItems,
-                                        client = client,
-                                        imageLoader = imageLoader,
-                                        onPlayClick = { /* TODO: navigate to player */ },
-                                        onInfoClick = { /* TODO: navigate to detail */ },
-                                    )
-                                }
+                                HeroCarousel(
+                                    items = heroItems,
+                                    client = client,
+                                    imageLoader = imageLoader,
+                                    onPlayClick = { /* TODO: navigate to player */ },
+                                    onInfoClick = { /* TODO: navigate to detail */ },
+                                    modifier = Modifier
+                                        .focusRequester(carouselFocusRequester)
+                                        .focusProperties {
+                                            up = navBarFocusRequester
+                                        },
+                                    navBarFocusRequester = navBarFocusRequester,
+                                )
                             }
 
-                            // Continue Watching
-                            val watching = state.watchingItems()
-                            if (watching.isNotEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Continue Watching",
-                                        items = watching,
-                                    ) { mediaItem ->
-                                        LandscapeMediaCard(
-                                            item = mediaItem,
-                                            client = client,
-                                            imageLoader = imageLoader,
-                                            onClick = { /* TODO: navigate to player */ },
-                                        )
+                            // Scrollable content rows
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .onFocusChanged { focusState ->
+                                        Log.d(TAG, "DashboardScreen(LazyColumn): onFocusChanged — " +
+                                                "isFocused=${focusState.isFocused}, " +
+                                                "hasFocus=${focusState.hasFocus}")
+                                    },
+                                verticalArrangement = Arrangement.spacedBy(24.dp),
+                                contentPadding = PaddingValues(top = 24.dp, bottom = 48.dp),
+                            ) {
+                                // Continue Watching
+                                val watching = state.watchingItems()
+                                if (watching.isNotEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Continue Watching",
+                                            items = watching,
+                                        ) { mediaItem ->
+                                            LandscapeMediaCard(
+                                                item = mediaItem,
+                                                client = client,
+                                                imageLoader = imageLoader,
+                                                onClick = { /* TODO: navigate to player */ },
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Recently Added Movies
-                            val recentMovies = state.recentMovies()
-                            if (recentMovies.isNotEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Recently Added Movies",
-                                        items = recentMovies,
-                                    ) { mediaItem ->
-                                        PortraitMediaCard(
-                                            item = mediaItem,
-                                            client = client,
-                                            imageLoader = imageLoader,
-                                            onClick = { /* TODO: navigate to detail */ },
-                                        )
+                                // Recently Added Movies
+                                val recentMovies = state.recentMovies()
+                                if (recentMovies.isNotEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Recently Added Movies",
+                                            items = recentMovies,
+                                        ) { mediaItem ->
+                                            PortraitMediaCard(
+                                                item = mediaItem,
+                                                client = client,
+                                                imageLoader = imageLoader,
+                                                onClick = { /* TODO: navigate to detail */ },
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Recently Added TV Shows
-                            val recentShows = state.recentShows()
-                            if (recentShows.isNotEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Recently Added TV Shows",
-                                        items = recentShows,
-                                    ) { mediaItem ->
-                                        PortraitMediaCard(
-                                            item = mediaItem,
-                                            client = client,
-                                            imageLoader = imageLoader,
-                                            onClick = { /* TODO: navigate to detail */ },
-                                        )
+                                // Recently Added TV Shows
+                                val recentShows = state.recentShows()
+                                if (recentShows.isNotEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Recently Added TV Shows",
+                                            items = recentShows,
+                                        ) { mediaItem ->
+                                            PortraitMediaCard(
+                                                item = mediaItem,
+                                                client = client,
+                                                imageLoader = imageLoader,
+                                                onClick = { /* TODO: navigate to detail */ },
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Trending Movies
-                            val trendingMovies = state.trending?.movies
-                            if (!trendingMovies.isNullOrEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Trending Movies",
-                                        items = trendingMovies,
-                                    ) { tmdbItem ->
-                                        DiscoverCard(
-                                            item = tmdbItem,
-                                            onClick = { /* TODO: navigate to detail */ },
-                                        )
+                                // Trending Movies
+                                val trendingMovies = state.trending?.movies
+                                if (!trendingMovies.isNullOrEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Trending Movies",
+                                            items = trendingMovies,
+                                        ) { tmdbItem ->
+                                            DiscoverCard(
+                                                item = tmdbItem,
+                                                onClick = { /* TODO: navigate to detail */ },
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Trending TV Shows
-                            val trendingTv = state.trending?.tv
-                            if (!trendingTv.isNullOrEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Trending TV Shows",
-                                        items = trendingTv,
-                                    ) { tmdbItem ->
-                                        DiscoverCard(
-                                            item = tmdbItem,
-                                            onClick = { /* TODO: navigate to detail */ },
-                                        )
+                                // Trending TV Shows
+                                val trendingTv = state.trending?.tv
+                                if (!trendingTv.isNullOrEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Trending TV Shows",
+                                            items = trendingTv,
+                                        ) { tmdbItem ->
+                                            DiscoverCard(
+                                                item = tmdbItem,
+                                                onClick = { /* TODO: navigate to detail */ },
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            // Upcoming Movies
-                            val upcomingMovies = state.upcoming?.movies
-                            if (!upcomingMovies.isNullOrEmpty()) {
-                                item {
-                                    MediaRow(
-                                        title = "Upcoming Movies",
-                                        items = upcomingMovies,
-                                    ) { tmdbItem ->
-                                        DiscoverCard(
-                                            item = tmdbItem,
-                                            onClick = { /* TODO: navigate to detail */ },
-                                        )
+                                // Upcoming Movies
+                                val upcomingMovies = state.upcoming?.movies
+                                if (!upcomingMovies.isNullOrEmpty()) {
+                                    item {
+                                        MediaRow(
+                                            title = "Upcoming Movies",
+                                            items = upcomingMovies,
+                                        ) { tmdbItem ->
+                                            DiscoverCard(
+                                                item = tmdbItem,
+                                                onClick = { /* TODO: navigate to detail */ },
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        // Nav bar SECOND — drawn on top (last in Box = visually on top).
-                        // No zIndex, no focusGroup, no focusRequester, no focusProperties.
-                        // Spatial D-pad navigation handles nav ↔ content transitions.
+                        // Nav bar — drawn on top (last in Box = visually on top).
                         TopNavBar(
                             user = state.user,
                             libraries = state.libraries,
@@ -230,6 +270,11 @@ class DashboardScreen {
                                 }
                             },
                             onLibrarySelected = { /* TODO: navigate to library */ },
+                            modifier = Modifier
+                                .focusRequester(navBarFocusRequester)
+                                .focusProperties {
+                                    down = carouselFocusRequester
+                                },
                         )
 
                         // Search overlay

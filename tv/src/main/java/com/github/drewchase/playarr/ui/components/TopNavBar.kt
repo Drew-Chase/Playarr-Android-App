@@ -1,5 +1,6 @@
 package com.github.drewchase.playarr.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -18,8 +19,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,6 +38,8 @@ import coil3.compose.AsyncImage
 import com.github.drewchase.playarr.commonlib.data.PlexLibrary
 import com.github.drewchase.playarr.commonlib.data.PlexUser
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
+
+private const val TAG = "PlayarrFocus"
 
 enum class NavItem {
     HOME, MOVIES, TV_SHOWS, DISCOVER, SEARCH
@@ -54,7 +62,6 @@ fun TopNavBar(
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
 
-    // The modifier from the parent includes focusRequester, focusProperties, and focusGroup
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -67,7 +74,18 @@ fun TopNavBar(
                     )
                 )
             )
-            .padding(horizontal = 48.dp),
+            .padding(horizontal = 48.dp)
+            .onFocusChanged { focusState ->
+                Log.d(TAG, "TopNavBar(Row): onFocusChanged — " +
+                        "isFocused=${focusState.isFocused}, " +
+                        "hasFocus=${focusState.hasFocus}")
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    Log.d(TAG, "TopNavBar(Row): onKeyEvent — key=${keyEvent.key}")
+                }
+                false
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Logo
@@ -135,6 +153,12 @@ fun TopNavBar(
             // Search icon button
             Button(
                 onClick = { onNavItemSelected(NavItem.SEARCH) },
+                modifier = Modifier
+                    .onFocusChanged { focusState ->
+                        Log.d(TAG, "TopNavBar(SearchBtn): onFocusChanged — " +
+                                "isFocused=${focusState.isFocused}, " +
+                                "hasFocus=${focusState.hasFocus}")
+                    },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
                     contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
@@ -150,9 +174,15 @@ fun TopNavBar(
                 )
             }
 
-            // User profile button - focusable so D-pad can reach it
+            // User profile button
             Button(
                 onClick = { /* TODO: show user profile */ },
+                modifier = Modifier
+                    .onFocusChanged { focusState ->
+                        Log.d(TAG, "TopNavBar(ProfileBtn): onFocusChanged — " +
+                                "isFocused=${focusState.isFocused}, " +
+                                "hasFocus=${focusState.hasFocus}")
+                    },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
                     contentColor = PlayarrTheme.colors.foreground,
@@ -221,6 +251,18 @@ private fun NavButton(
 ) {
     Button(
         onClick = onClick,
+        modifier = Modifier
+            .onFocusChanged { focusState ->
+                Log.d(TAG, "TopNavBar(NavBtn:$label): onFocusChanged — " +
+                        "isFocused=${focusState.isFocused}, " +
+                        "hasFocus=${focusState.hasFocus}")
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    Log.d(TAG, "TopNavBar(NavBtn:$label): onKeyEvent — key=${keyEvent.key}")
+                }
+                false
+            },
         colors = ButtonDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = if (isActive) PlayarrTheme.colors.primary

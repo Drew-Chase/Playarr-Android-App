@@ -1,9 +1,11 @@
 package com.github.drewchase.playarr.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -11,6 +13,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
+
+private const val TAG = "PlayarrFocus"
 
 enum class PlayarrButtonStyle {
     PRIMARY, SECONDARY, OUTLINE
@@ -28,7 +32,12 @@ fun PlayarrButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier
+            .onFocusChanged { focusState ->
+                Log.d(TAG, "PlayarrButton(style=$style): onFocusChanged — " +
+                        "isFocused=${focusState.isFocused}, " +
+                        "hasFocus=${focusState.hasFocus}")
+            },
         enabled = enabled,
         shape = ButtonDefaults.shape(shape = PlayarrTheme.shapes.button),
         border = when (style) {

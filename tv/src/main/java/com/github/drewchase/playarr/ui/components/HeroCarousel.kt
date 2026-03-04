@@ -1,5 +1,6 @@
 package com.github.drewchase.playarr.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,17 +17,27 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Carousel
+import androidx.tv.material3.CarouselDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
+import androidx.tv.material3.rememberCarouselState
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -34,11 +45,9 @@ import com.github.drewchase.playarr.commonlib.PlayarrClient
 import com.github.drewchase.playarr.commonlib.data.PlexMediaItem
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
 
-/**
- * Full-width hero carousel showing featured media with backdrop art.
- * Auto-rotates. Shows title, metadata, progress bar, and action buttons.
- */
-@OptIn(ExperimentalTvMaterial3Api::class)
+private const val TAG = "PlayarrFocus"
+
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun HeroCarousel(
     items: List<PlexMediaItem>,
@@ -47,16 +56,57 @@ fun HeroCarousel(
     onPlayClick: (PlexMediaItem) -> Unit,
     onInfoClick: (PlexMediaItem) -> Unit,
     modifier: Modifier = Modifier,
+    navBarFocusRequester: FocusRequester? = null,
 ) {
-    if (items.isEmpty()) return
+    if (items.isEmpty()) {
+        Log.w(TAG, "HeroCarousel: items is EMPTY, returning early")
+        return
+    }
+
+    Log.d(TAG, "HeroCarousel: composing with ${items.size} items")
 
     val backgroundColor = PlayarrTheme.colors.background
+    val carouselState = rememberCarouselState()
+
+    // Modifier applied to focusable buttons inside the carousel.
+    // exit → FocusRequester.Default lets focus leave the Carousel in any direction.
+    // up → navBarFocusRequester explicitly wires D-pad Up to the nav bar.
+    val carouselButtonFocusModifier = Modifier.focusProperties {
+        exit = { direction ->
+            Log.d(TAG, "HeroCarousel: focusProperties.exit called, direction=$direction")
+            FocusRequester.Default
+        }
+        if (navBarFocusRequester != null) {
+            up = navBarFocusRequester
+        }
+    }
 
     Carousel(
         itemCount = items.size,
+        carouselState = carouselState,
         modifier = modifier
             .fillMaxWidth()
-            .height(520.dp),
+            .height(520.dp)
+            .onFocusChanged { focusState ->
+                Log.d(TAG, "HeroCarousel(Carousel): onFocusChanged — " +
+                        "isFocused=${focusState.isFocused}, " +
+                        "hasFocus=${focusState.hasFocus}")
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    Log.d(TAG, "HeroCarousel(Carousel): onKeyEvent — key=${keyEvent.key}")
+                }
+                false
+            },
+        carouselIndicator = {
+            CarouselDefaults.IndicatorRow(
+                itemCount = items.size,
+                activeItemIndex = carouselState.activeItemIndex,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 48.dp, bottom = 16.dp),
+            )
+        },
     ) { index ->
         val item = items[index]
         val artUrl = item.art?.let { client.getImageUrl(it, width = 1920, height = 800) }
@@ -144,7 +194,7 @@ fun HeroCarousel(
                     )
                 }
 
-                // Summary (2 lines max)
+                // Summary
                 val summary = item.summary
                 if (!summary.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -167,12 +217,33 @@ fun HeroCarousel(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Action buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Action buttons: [Play/Resume] [More Info]
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.onFocusChanged { focusState ->
+                        Log.d(TAG, "HeroCarousel(ButtonRow): onFocusChanged — " +
+                                "isFocused=${focusState.isFocused}, " +
+                                "hasFocus=${focusState.hasFocus}")
+                    },
+                ) {
+                    // Play / Resume button
                     val buttonLabel = if (progress != null && progress > 0f) "Resume" else "Play"
                     PlayarrButton(
                         onClick = { onPlayClick(item) },
                         style = PlayarrButtonStyle.PRIMARY,
+                        modifier = carouselButtonFocusModifier
+                            .onFocusChanged { focusState ->
+                                Log.d(TAG, "HeroCarousel(PlayButton): onFocusChanged — " +
+                                        "isFocused=${focusState.isFocused}, " +
+                                        "hasFocus=${focusState.hasFocus}")
+                            }
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                    Log.d(TAG, "HeroCarousel(PlayButton): onKeyEvent — key=${keyEvent.key}")
+                                }
+                                false
+                            },
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
@@ -185,9 +256,23 @@ fun HeroCarousel(
                             style = PlayarrTheme.typography.lg,
                         )
                     }
+
+                    // More Info button
                     PlayarrButton(
                         onClick = { onInfoClick(item) },
                         style = PlayarrButtonStyle.OUTLINE,
+                        modifier = carouselButtonFocusModifier
+                            .onFocusChanged { focusState ->
+                                Log.d(TAG, "HeroCarousel(MoreInfoButton): onFocusChanged — " +
+                                        "isFocused=${focusState.isFocused}, " +
+                                        "hasFocus=${focusState.hasFocus}")
+                            }
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                    Log.d(TAG, "HeroCarousel(MoreInfoButton): onKeyEvent — key=${keyEvent.key}")
+                                }
+                                false
+                            },
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
