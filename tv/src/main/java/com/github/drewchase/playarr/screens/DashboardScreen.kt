@@ -7,7 +7,6 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,10 +21,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -124,37 +119,36 @@ class DashboardScreen {
                                         "hasFocus=${focusState.hasFocus}")
                             }
                     ) {
-                        // Main content: Carousel (fixed) + scrollable rows below
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Hero Carousel — OUTSIDE LazyColumn so focus system can see it
+                        // Main content: single scrollable list so carousel slides up on navigate-down
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onFocusChanged { focusState ->
+                                    Log.d(TAG, "DashboardScreen(LazyColumn): onFocusChanged — " +
+                                            "isFocused=${focusState.isFocused}, " +
+                                            "hasFocus=${focusState.hasFocus}")
+                                },
+                            verticalArrangement = Arrangement.spacedBy(24.dp),
+                            contentPadding = PaddingValues(bottom = 48.dp),
+                        ) {
+                            // Hero Carousel — first scrollable item, slides up when navigating down
                             if (heroItems.isNotEmpty()) {
-                                HeroCarousel(
-                                    items = heroItems,
-                                    client = client,
-                                    imageLoader = imageLoader,
-                                    onPlayClick = { /* TODO: navigate to player */ },
-                                    onInfoClick = { /* TODO: navigate to detail */ },
-                                    modifier = Modifier
-                                        .focusRequester(carouselFocusRequester)
-                                        .focusProperties {
-                                            up = navBarFocusRequester
-                                        },
-                                    navBarFocusRequester = navBarFocusRequester,
-                                )
+                                item {
+                                    HeroCarousel(
+                                        items = heroItems,
+                                        client = client,
+                                        imageLoader = imageLoader,
+                                        onPlayClick = { /* TODO: navigate to player */ },
+                                        onInfoClick = { /* TODO: navigate to detail */ },
+                                        modifier = Modifier
+                                            .focusRequester(carouselFocusRequester)
+                                            .focusProperties {
+                                                up = navBarFocusRequester
+                                            },
+                                        navBarFocusRequester = navBarFocusRequester,
+                                    )
+                                }
                             }
-
-                            // Scrollable content rows
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .onFocusChanged { focusState ->
-                                        Log.d(TAG, "DashboardScreen(LazyColumn): onFocusChanged — " +
-                                                "isFocused=${focusState.isFocused}, " +
-                                                "hasFocus=${focusState.hasFocus}")
-                                    },
-                                verticalArrangement = Arrangement.spacedBy(24.dp),
-                                contentPadding = PaddingValues(top = 24.dp, bottom = 48.dp),
-                            ) {
                                 // Continue Watching
                                 val watching = state.watchingItems()
                                 if (watching.isNotEmpty()) {
@@ -257,7 +251,6 @@ class DashboardScreen {
                                     }
                                 }
                             }
-                        }
 
                         // Nav bar — drawn on top (last in Box = visually on top).
                         TopNavBar(
