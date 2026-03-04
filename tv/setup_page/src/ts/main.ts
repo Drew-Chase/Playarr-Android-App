@@ -25,18 +25,26 @@ async function pollPlexPin(clientId: string, pinId: number): Promise<string | nu
     return data.authToken || null;
 }
 
-async function submitSetup(serverUrl: string, authToken: string) {
-    await fetch("/api/setup", {
+interface SetupResponse {
+    success: boolean;
+    error?: string;
+}
+
+async function submitSetup(serverUrl: string, authToken: string): Promise<SetupResponse> {
+    const resp = await fetch("/api/setup", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({serverUrl, authToken}),
     });
+    return await resp.json();
 }
 
 const plexCodeEl = document.querySelector<HTMLElement>("#plex-code")!;
 const plexLinkButton = document.querySelector<HTMLButtonElement>("#plex-link-button")!;
 const completeButton = document.querySelector<HTMLButtonElement>("#complete-button")!;
 const copyTextEl = document.querySelector<HTMLElement>(".copy-text")!;
+const errorMessageEl = document.querySelector<HTMLElement>("#error-message")!;
+const serverUrlInput = document.querySelector<HTMLInputElement>("#server-url")!;
 
 let plexAuthToken: string | null = null;
 let pollInterval: ReturnType<typeof setInterval> | undefined;
@@ -122,18 +130,57 @@ plexLinkButton.addEventListener("click", () => {
     }
 });
 
-// Complete button submits setup
+// Validate protocol on input change
+serverUrlInput.addEventListener("input", () => {
+    const value = serverUrlInput.value.trim();
+    if (value && !value.startsWith("http://") && !value.startsWith("https://")) {
+        errorMessageEl.textContent = "URL must start with http:// or https://";
+        serverUrlInput.classList.add("input-error");
+    } else {
+        errorMessageEl.textContent = "";
+        serverUrlInput.classList.remove("input-error");
+    }
+});
+
+// Complete button submits setup with validation
 completeButton.addEventListener("click", async () => {
-    const serverUrl = document.querySelector<HTMLInputElement>("#server-url")!.value;
+    const serverUrl = serverUrlInput.value.trim();
+    errorMessageEl.textContent = "";
+    serverUrlInput.classList.remove("input-error");
+
     if (!serverUrl) {
-        alert("Please enter a server URL");
+        errorMessageEl.textContent = "Please enter a server URL.";
+        serverUrlInput.classList.add("input-error");
+        serverUrlInput.focus();
+        return;
+    }
+    if (!serverUrl.startsWith("http://") && !serverUrl.startsWith("https://")) {
+        errorMessageEl.textContent = "URL must start with http:// or https://";
+        serverUrlInput.classList.add("input-error");
+        serverUrlInput.focus();
         return;
     }
     if (!plexAuthToken) return;
+
     completeButton.disabled = true;
-    completeButton.textContent = "Completing...";
-    await submitSetup(serverUrl, plexAuthToken);
-    completeButton.textContent = "Done!";
+    completeButton.textContent = "Validating...";
+
+    try {
+        const result = await submitSetup(serverUrl, plexAuthToken);
+        if (result.success) {
+            completeButton.textContent = "Done!";
+            errorMessageEl.textContent = "";
+        } else {
+            errorMessageEl.textContent = result.error || "Setup failed. Please try again.";
+            serverUrlInput.classList.add("input-error");
+            completeButton.disabled = false;
+            completeButton.textContent = "Complete";
+        }
+    } catch {
+        errorMessageEl.textContent = "Connection error. Please try again.";
+        completeButton.disabled = false;
+        completeButton.textContent = "Complete";
+    }
 });
 
 init();

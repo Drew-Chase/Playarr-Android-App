@@ -6,14 +6,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.NonInteractiveSurfaceDefaults
 import androidx.tv.material3.Surface
-import com.github.drewchase.playarr.ui.components.PlayarrText
+import com.github.drewchase.playarr.screens.DashboardScreen
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
-import com.github.drewchase.playarr.welcome.WelcomeScreen
+import com.github.drewchase.playarr.screens.WelcomeScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -23,6 +24,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val config = AppConfiguration(this)
+        val setupComplete = mutableStateOf(config.isSetupComplete)
         setContent {
             PlayarrTheme {
                 Surface(
@@ -33,10 +35,12 @@ class MainActivity : ComponentActivity() {
                     )
                 )
                 {
-                    if (!config.isSetupComplete) {
-                        WelcomeScreen().View()
+                    if (!setupComplete.value) {
+                        WelcomeScreen(onSetupComplete = {
+                            setupComplete.value = true
+                        }).View()
                     } else {
-                        PlayarrText("Hello World")
+                        DashboardScreen().View()
                     }
                 }
             }

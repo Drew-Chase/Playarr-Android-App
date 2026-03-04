@@ -6,6 +6,7 @@ import android.net.ConnectivityManager
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
+import com.github.drewchase.playarr.commonlib.PlayarrClient
 import fi.iki.elonen.NanoHTTPD
 import java.net.Inet4Address
 
@@ -67,19 +68,35 @@ class SetupServer(private val context: Context, private val clientId: String) :
         val serverUrl = extractJsonField(body, "serverUrl")
         val authToken = extractJsonField(body, "authToken")
 
-        if (serverUrl != null && authToken != null) {
-            onSetupComplete?.invoke(serverUrl, authToken)
-            return newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                """{"success": true}"""
-            )
+        if (serverUrl.isNullOrBlank()) {
+            return jsonError("Please enter a server URL.")
+        }
+        if (authToken.isNullOrBlank()) {
+            return jsonError("Please link your Plex account first.")
         }
 
+        // Validate the server URL by trying to fetch server info
+        return try {
+            val client = PlayarrClient(serverUrl)
+            val info = client.getServerInfo()
+            // If we get here, the server is reachable and returned valid data
+            onSetupComplete?.invoke(serverUrl, authToken)
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                """{"success": true, "serverName": "${info.version}"}"""
+            )
+        } catch (e: Exception) {
+            jsonError("Could not connect to Playarr server at $serverUrl. Please check the URL and try again.")
+        }
+    }
+
+    private fun jsonError(message: String): Response {
+        val escaped = message.replace("\"", "\\\"")
         return newFixedLengthResponse(
             Response.Status.BAD_REQUEST,
             "application/json",
-            """{"success": false, "error": "Missing serverUrl or authToken"}"""
+            """{"success": false, "error": "$escaped"}"""
         )
     }
 

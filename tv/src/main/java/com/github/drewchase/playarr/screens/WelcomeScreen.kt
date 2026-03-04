@@ -1,4 +1,4 @@
-package com.github.drewchase.playarr.welcome
+package com.github.drewchase.playarr.screens
 
 import android.Manifest
 import android.graphics.Bitmap
@@ -7,6 +7,7 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
-class WelcomeScreen {
+class WelcomeScreen(private val onSetupComplete: (() -> Unit)? = null) {
 
     @RequiresApi(Build.VERSION_CODES.M)
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
@@ -65,8 +66,13 @@ class WelcomeScreen {
         val pinId = remember { mutableStateOf<Long?>(null) }
         val pinError = remember { mutableStateOf<String?>(null) }
 
-        // Start web server
+        // Start web server and wire up the setup complete callback
         DisposableEffect(Unit) {
+            setupServer.onSetupComplete = { serverUrl, authToken ->
+                config.serverUrl = serverUrl
+                config.authToken = authToken
+                onSetupComplete?.invoke()
+            }
             setupServer.start()
             onDispose {
                 setupServer.stop()
@@ -115,12 +121,13 @@ class WelcomeScreen {
                                 PlayarrTheme.colors.content1
                             )
                         )
-                    ),
+                    )
+                    .border(width = 4.dp, color = PlayarrTheme.colors.primary),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
                     // Title
                     PlayarrText(

@@ -113,3 +113,18 @@ button.linked {
     font-weight: bold;
     text-transform: uppercase;
 }
+
+#error-message {
+    color: #ef4444;
+    font-size: 0.875rem;
+    text-align: center;
+    min-height: 1.25rem;
+}
+
+#error-message:empty {
+    display: none;
+}
+
+input.input-error {
+    border-color: #ef4444;
+}
