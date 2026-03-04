@@ -1,16 +1,13 @@
 package com.github.drewchase.playarr.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -21,17 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import coil3.ImageLoader
@@ -61,7 +54,6 @@ fun TopNavBar(
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
 
-    // Transparent gradient navbar overlaying content
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -77,7 +69,7 @@ fun TopNavBar(
             .padding(horizontal = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Logo + brand
+        // Logo
         PlayarrText(
             text = "Playarr",
             style = PlayarrTheme.typography.title.copy(fontWeight = FontWeight.Bold),
@@ -86,25 +78,25 @@ fun TopNavBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Nav items - centered
+        // Centered nav items - using tv-material3 Button for proper D-pad focus
         Row(
-            horizontalArrangement = Arrangement.spacedBy(32.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavTextLink(
+            NavButton(
                 label = "Home",
                 isActive = activeItem == NavItem.HOME,
                 onClick = { onNavItemSelected(NavItem.HOME) },
             )
 
             if (movieLibraries.size == 1) {
-                NavTextLink(
+                NavButton(
                     label = movieLibraries[0].title,
                     isActive = activeItem == NavItem.MOVIES,
                     onClick = { onLibrarySelected(movieLibraries[0]) },
                 )
             } else if (movieLibraries.size > 1) {
-                NavTextLink(
+                NavButton(
                     label = "Movies",
                     isActive = activeItem == NavItem.MOVIES,
                     onClick = { showMovieModal.value = true },
@@ -112,20 +104,20 @@ fun TopNavBar(
             }
 
             if (tvLibraries.size == 1) {
-                NavTextLink(
+                NavButton(
                     label = tvLibraries[0].title,
                     isActive = activeItem == NavItem.TV_SHOWS,
                     onClick = { onLibrarySelected(tvLibraries[0]) },
                 )
             } else if (tvLibraries.size > 1) {
-                NavTextLink(
+                NavButton(
                     label = "TV Shows",
                     isActive = activeItem == NavItem.TV_SHOWS,
                     onClick = { showTvModal.value = true },
                 )
             }
 
-            NavTextLink(
+            NavButton(
                 label = "Discover",
                 isActive = activeItem == NavItem.DISCOVER,
                 onClick = { onNavItemSelected(NavItem.DISCOVER) },
@@ -134,25 +126,31 @@ fun TopNavBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Right side: Search icon + User avatar
+        // Right side: Search + User avatar
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Search icon
-            NavIconButton(
+            // Search icon - tv-material Button for proper focus
+            Button(
                 onClick = { onNavItemSelected(NavItem.SEARCH) },
+                colors = ButtonDefaults.colors(
+                    containerColor = Color.Transparent,
+                    contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+                    focusedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
+                    focusedContentColor = PlayarrTheme.colors.foreground,
+                ),
+                shape = ButtonDefaults.shape(shape = CircleShape),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
-                    tint = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
                     modifier = Modifier.size(24.dp),
                 )
             }
 
-            // User avatar
-            if (user?.thumb != null) {
+            // User profile image
+            if (user?.thumb?.isNotBlank() == true) {
                 AsyncImage(
                     model = user.thumb,
                     imageLoader = imageLoader,
@@ -200,74 +198,33 @@ fun TopNavBar(
 }
 
 /**
- * Plain text nav link with no background. Shows underline-like effect on focus.
- * Active item shows in primary green, inactive in muted foreground.
+ * Nav text button using tv-material3 Button with transparent background.
+ * Ensures proper TV D-pad focus handling and navigation.
  */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun NavTextLink(
+private fun NavButton(
     label: String,
     isActive: Boolean,
     onClick: () -> Unit,
 ) {
-    val isFocused = remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .onFocusChanged { isFocused.value = it.isFocused }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.Enter || event.key == Key.DirectionCenter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = if (isActive) PlayarrTheme.colors.primary
+            else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+            focusedContainerColor = Color.Transparent,
+            focusedContentColor = if (isActive) PlayarrTheme.colors.primary
+            else PlayarrTheme.colors.foreground,
+        ),
+        shape = ButtonDefaults.shape(shape = PlayarrTheme.shapes.button),
     ) {
         PlayarrText(
             text = label,
             style = PlayarrTheme.typography.base.copy(
-                fontWeight = if (isActive || isFocused.value) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
             ),
-            color = when {
-                isActive -> PlayarrTheme.colors.primary
-                isFocused.value -> PlayarrTheme.colors.foreground
-                else -> PlayarrTheme.colors.foreground.copy(alpha = 0.7f)
-            },
         )
-    }
-}
-
-/**
- * Focusable icon button for the nav bar (search icon).
- */
-@Composable
-private fun NavIconButton(
-    onClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val isFocused = remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .onFocusChanged { isFocused.value = it.isFocused }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp &&
-                    (event.key == Key.Enter || event.key == Key.DirectionCenter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
-            .padding(8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        content()
     }
 }

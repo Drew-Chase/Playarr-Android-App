@@ -16,8 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.github.drewchase.playarr.AppConfiguration
 import com.github.drewchase.playarr.commonlib.PlayarrClient
@@ -54,6 +58,10 @@ class DashboardScreen {
         val imageLoader = remember { createPlayarrImageLoader(context, config.authToken) }
         val dashboardState = remember { mutableStateOf(DashboardState()) }
         val showSearch = remember { mutableStateOf(false) }
+
+        // Focus requesters for explicit nav ↔ content focus wiring
+        val navFocusRequester = remember { FocusRequester() }
+        val contentFocusRequester = remember { FocusRequester() }
 
         // Load data on first composition
         LaunchedEffect(Unit) {
@@ -93,9 +101,33 @@ class DashboardScreen {
                 }
                 else -> {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // Main scrollable content - no top padding so carousel goes behind the nav
+                        // Top navigation bar - zIndex keeps it visually on top.
+                        // focusProperties wires D-pad Down to the content below.
+                        TopNavBar(
+                            user = state.user,
+                            libraries = state.libraries,
+                            imageLoader = imageLoader,
+                            onNavItemSelected = { navItem ->
+                                if (navItem == NavItem.SEARCH) {
+                                    showSearch.value = true
+                                }
+                            },
+                            onLibrarySelected = { /* TODO: navigate to library */ },
+                            modifier = Modifier
+                                .zIndex(1f)
+                                .focusRequester(navFocusRequester)
+                                .focusProperties { down = contentFocusRequester }
+                                .focusGroup(),
+                        )
+
+                        // Main scrollable content.
+                        // focusProperties wires D-pad Up to the nav bar.
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize().focusGroup(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .focusRequester(contentFocusRequester)
+                                .focusProperties { up = navFocusRequester }
+                                .focusGroup(),
                             verticalArrangement = Arrangement.spacedBy(24.dp),
                             contentPadding = PaddingValues(bottom = 48.dp),
                         ) {
@@ -215,19 +247,6 @@ class DashboardScreen {
                                 }
                             }
                         }
-
-                        // Top navigation bar (overlays content)
-                        TopNavBar(
-                            user = state.user,
-                            libraries = state.libraries,
-                            imageLoader = imageLoader,
-                            onNavItemSelected = { navItem ->
-                                if (navItem == NavItem.SEARCH) {
-                                    showSearch.value = true
-                                }
-                            },
-                            onLibrarySelected = { /* TODO: navigate to library */ },
-                        )
 
                         // Search overlay
                         if (showSearch.value) {
