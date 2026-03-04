@@ -11,7 +11,7 @@ data class PlayarrShapes(
     val small: Shape,    // 2dp
     val medium: Shape,   // 4dp
     val large: Shape,    // 6dp
-    val button: Shape,   // 8dp
+    val button: Shape,   // 2dp
     val full: Shape,     // 50% circle
 )
 
@@ -20,7 +20,7 @@ val LocalPlayarrShapes = staticCompositionLocalOf {
         small = RoundedCornerShape(2.dp),
         medium = RoundedCornerShape(4.dp),
         large = RoundedCornerShape(6.dp),
-        button = RoundedCornerShape(8.dp),
+        button = RoundedCornerShape(2.dp),
         full = RoundedCornerShape(50),
     )
 }
