@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import fi.iki.elonen.NanoHTTPD
+import java.net.Inet4Address
 
 class SetupServer(private val context: Context) : NanoHTTPD(null, 65267) {
     override fun serve(session: IHTTPSession?): Response? {
@@ -22,10 +23,11 @@ class SetupServer(private val context: Context) : NanoHTTPD(null, 65267) {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork
         val linkProperties = connectivityManager.getLinkProperties(network)
-        val localIp = linkProperties?.linkAddresses?.first()?.address?.hostAddress
-        val port = this.listeningPort
+        val localIp = linkProperties?.linkAddresses
+            ?.firstOrNull { it.address is Inet4Address }
+            ?.address?.hostAddress
 
-        return "${localIp}:${port}"
+        return "${localIp}:65267"
     }
 
 }
