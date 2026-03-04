@@ -1,79 +1,79 @@
-const PLEX_PRODUCT = "Playarr";
-const PLEX_CLIENT_ID = "playarr-tv-" + getOrCreateClientId();
-
-function getOrCreateClientId(): string {
-    const key = "playarr-client-id";
-    let id = localStorage.getItem(key);
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem(key, id);
-    }
-    return id;
+// Fetch PIN and client ID from the TV's setup server
+interface PinData {
+    clientId: string;
+    pinId: number | null;
+    code: string | null;
 }
 
-const plexHeaders: HeadersInit = {
-    "Accept": "application/json",
-    "X-Plex-Product": PLEX_PRODUCT,
-    "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
-};
-
-async function requestPin(): Promise<{ id: number; code: string }> {
-    const resp = await fetch("https://plex.tv/api/v2/pins", {
-        method: "POST",
-        headers: {
-            ...plexHeaders,
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "strong=false",
-    });
-    if (!resp.ok) throw new Error(`Failed to request PIN: ${resp.status}`);
-    const data = await resp.json();
-    return {id: data.id, code: data.code};
+async function fetchPinFromTV(): Promise<PinData> {
+    const resp = await fetch("/api/pin");
+    if (!resp.ok) throw new Error(`Failed to fetch PIN: ${resp.status}`);
+    return await resp.json();
 }
 
-async function pollPin(id: number): Promise<string | null> {
-    const resp = await fetch(`https://plex.tv/api/v2/pins/${id}`, {
+async function pollPlexPin(clientId: string, pinId: number): Promise<string | null> {
+    const resp = await fetch(`https://plex.tv/api/v2/pins/${pinId}`, {
         method: "GET",
-        headers: plexHeaders,
+        headers: {
+            "Accept": "application/json",
+            "X-Plex-Product": "Playarr",
+            "X-Plex-Client-Identifier": clientId,
+        },
     });
     if (!resp.ok) throw new Error(`Failed to poll PIN: ${resp.status}`);
     const data = await resp.json();
     return data.authToken || null;
 }
 
-async function complete(serverUrl: string, plex_auth_token: string) {
-    const url = new URL("/complete", window.location.origin);
-    url.searchParams.set("plex_auth_token", plex_auth_token);
-    url.searchParams.set("serverUrl", serverUrl);
-    await fetch(url.toString());
+async function submitSetup(serverUrl: string, authToken: string) {
+    await fetch("/api/setup", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({serverUrl, authToken}),
+    });
 }
 
 const plexCodeEl = document.querySelector<HTMLElement>("#plex-code")!;
 const plexLinkButton = document.querySelector<HTMLButtonElement>("#plex-link-button")!;
 const completeButton = document.querySelector<HTMLButtonElement>("#complete-button")!;
+const copyTextEl = document.querySelector<HTMLElement>(".copy-text")!;
+
 let plexAuthToken: string | null = null;
 let pollInterval: ReturnType<typeof setInterval> | undefined;
 let pollTimeout: ReturnType<typeof setTimeout> | undefined;
 
-// Request a PIN immediately on load and display it
-async function initPin() {
+async function init() {
     plexCodeEl.textContent = "...";
+
     try {
-        const {id, code} = await requestPin();
-        plexCodeEl.textContent = code;
-        startPolling(id);
+        // Wait for the TV to generate the PIN (may take a moment on first load)
+        let pinData: PinData;
+        for (let i = 0; i < 15; i++) {
+            pinData = await fetchPinFromTV();
+            if (pinData.code && pinData.pinId) break;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        pinData = await fetchPinFromTV();
+        if (!pinData.code || !pinData.pinId) {
+            plexCodeEl.textContent = "Error";
+            return;
+        }
+
+        plexCodeEl.textContent = pinData.code;
+        startPolling(pinData.clientId, pinData.pinId);
     } catch {
         plexCodeEl.textContent = "Error";
     }
 }
 
-function startPolling(pinId: number) {
+function startPolling(clientId: string, pinId: number) {
     clearInterval(pollInterval);
     clearTimeout(pollTimeout);
 
     pollInterval = setInterval(async () => {
         try {
-            const token = await pollPin(pinId);
+            const token = await pollPlexPin(clientId, pinId);
             if (token) {
                 clearInterval(pollInterval);
                 clearTimeout(pollTimeout);
@@ -88,27 +88,24 @@ function startPolling(pinId: number) {
         }
     }, 2000);
 
+    // Timeout after 5 minutes - reload to get a fresh PIN
     pollTimeout = setTimeout(() => {
         clearInterval(pollInterval);
-        // Request a fresh PIN after timeout
-        initPin();
+        init();
     }, 300_000);
 }
 
 // Tap code to copy
-const copyTextEl = document.querySelector<HTMLElement>(".copy-text")!;
 plexCodeEl.addEventListener("click", () => {
     const code = plexCodeEl.textContent?.trim();
     if (!code || code === "..." || code === "Error") return;
 
     navigator.clipboard.writeText(code);
 
-    // Pop animation on the code
     plexCodeEl.classList.remove("copied");
-    void plexCodeEl.offsetWidth; // force reflow to restart animation
+    void plexCodeEl.offsetWidth;
     plexCodeEl.classList.add("copied");
 
-    // Flash the label to "Copied!"
     copyTextEl.textContent = "Copied!";
     copyTextEl.style.color = "var(--primary-color)";
     setTimeout(() => {
@@ -118,14 +115,14 @@ plexCodeEl.addEventListener("click", () => {
     }, 1200);
 });
 
-// Button opens plex.tv/link in a new tab
+// Link button opens plex.tv/link
 plexLinkButton.addEventListener("click", () => {
     if (!plexAuthToken) {
         window.open("https://plex.tv/link", "_blank");
     }
 });
 
-// Complete button
+// Complete button submits setup
 completeButton.addEventListener("click", async () => {
     const serverUrl = document.querySelector<HTMLInputElement>("#server-url")!.value;
     if (!serverUrl) {
@@ -135,7 +132,8 @@ completeButton.addEventListener("click", async () => {
     if (!plexAuthToken) return;
     completeButton.disabled = true;
     completeButton.textContent = "Completing...";
-    await complete(serverUrl, plexAuthToken);
+    await submitSetup(serverUrl, plexAuthToken);
+    completeButton.textContent = "Done!";
 });
 
-initPin();
+init();
