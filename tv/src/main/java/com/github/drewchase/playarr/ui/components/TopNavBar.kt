@@ -1,6 +1,9 @@
 package com.github.drewchase.playarr.ui.components
 
 import android.util.Log
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -14,19 +17,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -58,9 +70,56 @@ fun TopNavBar(
 ) {
     val showMovieModal = remember { mutableStateOf(false) }
     val showTvModal = remember { mutableStateOf(false) }
-
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
+
+    // Animated pill indicator state
+    val parentCoords = remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val itemCoords = remember { mutableStateMapOf<String, LayoutCoordinates>() }
+    val navBarHasFocus = remember { mutableStateOf(false) }
+    val focusedKey = remember { mutableStateOf<String?>(null) }
+
+    val activeKey = when (activeItem) {
+        NavItem.HOME -> "home"
+        NavItem.MOVIES -> "movies"
+        NavItem.TV_SHOWS -> "tvshows"
+        NavItem.DISCOVER -> "discover"
+        NavItem.SEARCH -> "search"
+    }
+
+    // Pill follows focused item when navbar has focus, otherwise rests on active page
+    val pillTargetKey = if (navBarHasFocus.value && focusedKey.value != null)
+        focusedKey.value!! else activeKey
+
+    val parent = parentCoords.value
+    val target = itemCoords[pillTargetKey]
+    val pillVisible = parent != null && target != null
+            && parent.isAttached && target.isAttached
+
+    val targetPos =
+        if (pillVisible) parent!!.localPositionOf(target!!, Offset.Zero) else Offset.Zero
+    val targetW = if (pillVisible) target!!.size.width.toFloat() else 0f
+    val targetH = if (pillVisible) target!!.size.height.toFloat() else 0f
+
+    val animSpec = tween<Float>(300, easing = FastOutSlowInEasing)
+    val pillX by animateFloatAsState(targetPos.x, animSpec, label = "pillX")
+    val pillY by animateFloatAsState(targetPos.y, animSpec, label = "pillY")
+    val pillW by animateFloatAsState(targetW, animSpec, label = "pillW")
+    val pillH by animateFloatAsState(targetH, animSpec, label = "pillH")
+    val pillAlpha by animateFloatAsState(
+        if (navBarHasFocus.value) 1.0f else 0.20f,
+        tween(300), label = "pillAlpha",
+    )
+
+    // Scale animations for search and profile (inline buttons)
+    val searchScale by animateFloatAsState(
+        if (focusedKey.value == "search" && navBarHasFocus.value) 1.1f else 1f,
+        tween(200), label = "searchScale",
+    )
+    val profileScale by animateFloatAsState(
+        if (focusedKey.value == "profile" && navBarHasFocus.value) 1.1f else 1f,
+        tween(200), label = "profileScale",
+    )
 
     Row(
         modifier = modifier
@@ -75,10 +134,25 @@ fun TopNavBar(
                 )
             )
             .padding(horizontal = 48.dp)
+            .onGloballyPositioned { parentCoords.value = it }
             .onFocusChanged { focusState ->
-                Log.d(TAG, "TopNavBar(Row): onFocusChanged — " +
-                        "isFocused=${focusState.isFocused}, " +
-                        "hasFocus=${focusState.hasFocus}")
+                navBarHasFocus.value = focusState.hasFocus
+                if (!focusState.hasFocus) focusedKey.value = null
+                Log.d(
+                    TAG, "TopNavBar(Row): onFocusChanged — " +
+                            "isFocused=${focusState.isFocused}, " +
+                            "hasFocus=${focusState.hasFocus}"
+                )
+            }
+            .drawBehind {
+                if (pillVisible && pillW > 0f) {
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = pillAlpha),
+                        topLeft = Offset(pillX, pillY),
+                        size = Size(pillW, pillH),
+                        cornerRadius = CornerRadius(pillH / 2f, pillH / 2f),
+                    )
+                }
             }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
@@ -104,43 +178,57 @@ fun TopNavBar(
         ) {
             NavButton(
                 label = "Home",
+                itemKey = "home",
                 isActive = activeItem == NavItem.HOME,
+                isFocused = focusedKey.value == "home" && navBarHasFocus.value,
                 onClick = { onNavItemSelected(NavItem.HOME) },
+                onFocused = { focusedKey.value = it },
+                onPositioned = { key, coords -> itemCoords[key] = coords },
             )
 
             if (movieLibraries.size == 1) {
                 NavButton(
                     label = movieLibraries[0].title,
+                    itemKey = "movies",
                     isActive = activeItem == NavItem.MOVIES,
+                    isFocused = focusedKey.value == "movies" && navBarHasFocus.value,
                     onClick = { onLibrarySelected(movieLibraries[0]) },
+                    onFocused = { focusedKey.value = it },
+                    onPositioned = { key, coords -> itemCoords[key] = coords },
                 )
             } else if (movieLibraries.size > 1) {
                 NavButton(
                     label = "Movies",
+                    itemKey = "movies",
                     isActive = activeItem == NavItem.MOVIES,
+                    isFocused = focusedKey.value == "movies" && navBarHasFocus.value,
                     onClick = { showMovieModal.value = true },
+                    onFocused = { focusedKey.value = it },
+                    onPositioned = { key, coords -> itemCoords[key] = coords },
                 )
             }
 
             if (tvLibraries.size == 1) {
                 NavButton(
                     label = tvLibraries[0].title,
+                    itemKey = "tvshows",
                     isActive = activeItem == NavItem.TV_SHOWS,
+                    isFocused = focusedKey.value == "tvshows" && navBarHasFocus.value,
                     onClick = { onLibrarySelected(tvLibraries[0]) },
+                    onFocused = { focusedKey.value = it },
+                    onPositioned = { key, coords -> itemCoords[key] = coords },
                 )
             } else if (tvLibraries.size > 1) {
                 NavButton(
                     label = "TV Shows",
+                    itemKey = "tvshows",
                     isActive = activeItem == NavItem.TV_SHOWS,
+                    isFocused = focusedKey.value == "tvshows" && navBarHasFocus.value,
                     onClick = { showTvModal.value = true },
+                    onFocused = { focusedKey.value = it },
+                    onPositioned = { key, coords -> itemCoords[key] = coords },
                 )
             }
-
-            NavButton(
-                label = "Discover",
-                isActive = activeItem == NavItem.DISCOVER,
-                onClick = { onNavItemSelected(NavItem.DISCOVER) },
-            )
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -154,16 +242,24 @@ fun TopNavBar(
             Button(
                 onClick = { onNavItemSelected(NavItem.SEARCH) },
                 modifier = Modifier
+                    .onGloballyPositioned { itemCoords["search"] = it }
                     .onFocusChanged { focusState ->
-                        Log.d(TAG, "TopNavBar(SearchBtn): onFocusChanged — " +
-                                "isFocused=${focusState.isFocused}, " +
-                                "hasFocus=${focusState.hasFocus}")
+                        if (focusState.isFocused) focusedKey.value = "search"
+                        Log.d(
+                            TAG, "TopNavBar(SearchBtn): onFocusChanged — " +
+                                    "isFocused=${focusState.isFocused}, " +
+                                    "hasFocus=${focusState.hasFocus}"
+                        )
+                    }
+                    .graphicsLayer {
+                        scaleX = searchScale
+                        scaleY = searchScale
                     },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
                     contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
-                    focusedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
-                    focusedContentColor = PlayarrTheme.colors.foreground,
+                    focusedContainerColor = Color.Transparent,
+                    focusedContentColor = PlayarrTheme.colors.background,
                 ),
                 shape = ButtonDefaults.shape(shape = CircleShape),
             ) {
@@ -178,16 +274,24 @@ fun TopNavBar(
             Button(
                 onClick = { /* TODO: show user profile */ },
                 modifier = Modifier
+                    .onGloballyPositioned { itemCoords["profile"] = it }
                     .onFocusChanged { focusState ->
-                        Log.d(TAG, "TopNavBar(ProfileBtn): onFocusChanged — " +
-                                "isFocused=${focusState.isFocused}, " +
-                                "hasFocus=${focusState.hasFocus}")
+                        if (focusState.isFocused) focusedKey.value = "profile"
+                        Log.d(
+                            TAG, "TopNavBar(ProfileBtn): onFocusChanged — " +
+                                    "isFocused=${focusState.isFocused}, " +
+                                    "hasFocus=${focusState.hasFocus}"
+                        )
+                    }
+                    .graphicsLayer {
+                        scaleX = profileScale
+                        scaleY = profileScale
                     },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
                     contentColor = PlayarrTheme.colors.foreground,
-                    focusedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
-                    focusedContentColor = PlayarrTheme.colors.foreground,
+                    focusedContainerColor = Color.Transparent,
+                    focusedContentColor = PlayarrTheme.colors.background,
                 ),
                 shape = ButtonDefaults.shape(shape = CircleShape),
             ) {
@@ -239,23 +343,32 @@ fun TopNavBar(
 }
 
 /**
- * Nav text button using tv-material3 Button with transparent background.
- * Proper TV D-pad focus handling.
+ * Nav text button with pill indicator support.
+ * Reports its position and focus state to the parent for the animated pill.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun NavButton(
     label: String,
+    itemKey: String,
     isActive: Boolean,
+    isFocused: Boolean,
     onClick: () -> Unit,
+    onFocused: (String) -> Unit,
+    onPositioned: (String, LayoutCoordinates) -> Unit,
 ) {
+
     Button(
         onClick = onClick,
         modifier = Modifier
+            .onGloballyPositioned { onPositioned(itemKey, it) }
             .onFocusChanged { focusState ->
-                Log.d(TAG, "TopNavBar(NavBtn:$label): onFocusChanged — " +
-                        "isFocused=${focusState.isFocused}, " +
-                        "hasFocus=${focusState.hasFocus}")
+                if (focusState.isFocused) onFocused(itemKey)
+                Log.d(
+                    TAG, "TopNavBar(NavBtn:$label): onFocusChanged — " +
+                            "isFocused=${focusState.isFocused}, " +
+                            "hasFocus=${focusState.hasFocus}"
+                )
             }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
@@ -265,19 +378,15 @@ private fun NavButton(
             },
         colors = ButtonDefaults.colors(
             containerColor = Color.Transparent,
-            contentColor = if (isActive) PlayarrTheme.colors.primary
-            else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+            contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
             focusedContainerColor = Color.Transparent,
-            focusedContentColor = if (isActive) PlayarrTheme.colors.primary
-            else PlayarrTheme.colors.foreground,
+            focusedContentColor = PlayarrTheme.colors.background,
         ),
         shape = ButtonDefaults.shape(shape = PlayarrTheme.shapes.button),
     ) {
         PlayarrText(
             text = label,
-            style = PlayarrTheme.typography.base.copy(
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            ),
+            style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.Normal),
         )
     }
 }

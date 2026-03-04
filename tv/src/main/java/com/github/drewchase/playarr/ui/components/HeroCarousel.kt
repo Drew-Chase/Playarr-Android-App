@@ -227,36 +227,6 @@ fun HeroCarousel(
                                 "hasFocus=${focusState.hasFocus}")
                     },
                 ) {
-                    // Play / Resume button
-                    val buttonLabel = if (progress != null && progress > 0f) "Resume" else "Play"
-                    PlayarrButton(
-                        onClick = { onPlayClick(item) },
-                        style = PlayarrButtonStyle.PRIMARY,
-                        modifier = carouselButtonFocusModifier
-                            .onFocusChanged { focusState ->
-                                Log.d(TAG, "HeroCarousel(PlayButton): onFocusChanged — " +
-                                        "isFocused=${focusState.isFocused}, " +
-                                        "hasFocus=${focusState.hasFocus}")
-                            }
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type == KeyEventType.KeyDown) {
-                                    Log.d(TAG, "HeroCarousel(PlayButton): onKeyEvent — key=${keyEvent.key}")
-                                }
-                                false
-                            },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        PlayarrText(
-                            text = buttonLabel,
-                            style = PlayarrTheme.typography.lg,
-                        )
-                    }
-
                     // More Info button
                     PlayarrButton(
                         onClick = { onInfoClick(item) },

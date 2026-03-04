@@ -77,9 +77,9 @@ fun PlayarrButton(
             PlayarrButtonStyle.OUTLINE -> ButtonDefaults.colors(
                 containerColor = Color.Transparent,
                 contentColor = PlayarrTheme.colors.foreground,
-                focusedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.15f),
-                focusedContentColor = PlayarrTheme.colors.foreground,
-                pressedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.2f),
+                focusedContainerColor = PlayarrTheme.colors.foreground,
+                focusedContentColor = PlayarrTheme.colors.background,
+                pressedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
                 pressedContentColor = PlayarrTheme.colors.foreground,
             )
         },
