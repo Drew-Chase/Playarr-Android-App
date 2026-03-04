@@ -54,6 +54,7 @@ fun TopNavBar(
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
 
+    // The modifier from the parent includes focusRequester, focusProperties, and focusGroup
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -78,7 +79,7 @@ fun TopNavBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Centered nav items - using tv-material3 Button for proper D-pad focus
+        // Centered nav items
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -126,12 +127,12 @@ fun TopNavBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Right side: Search + User avatar
+        // Right side: Search + User profile
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Search icon - tv-material Button for proper focus
+            // Search icon button
             Button(
                 onClick = { onNavItemSelected(NavItem.SEARCH) },
                 colors = ButtonDefaults.colors(
@@ -149,24 +150,34 @@ fun TopNavBar(
                 )
             }
 
-            // User profile image
-            if (user?.thumb?.isNotBlank() == true) {
-                AsyncImage(
-                    model = user.thumb,
-                    imageLoader = imageLoader,
-                    contentDescription = user.username ?: "User",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape),
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "User",
-                    tint = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
-                    modifier = Modifier.size(32.dp),
-                )
+            // User profile button - focusable so D-pad can reach it
+            Button(
+                onClick = { /* TODO: show user profile */ },
+                colors = ButtonDefaults.colors(
+                    containerColor = Color.Transparent,
+                    contentColor = PlayarrTheme.colors.foreground,
+                    focusedContainerColor = PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
+                    focusedContentColor = PlayarrTheme.colors.foreground,
+                ),
+                shape = ButtonDefaults.shape(shape = CircleShape),
+            ) {
+                if (user?.thumb?.isNotBlank() == true) {
+                    AsyncImage(
+                        model = user.thumb,
+                        imageLoader = imageLoader,
+                        contentDescription = user.username ?: "User",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = "User",
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
         }
     }
@@ -199,7 +210,7 @@ fun TopNavBar(
 
 /**
  * Nav text button using tv-material3 Button with transparent background.
- * Ensures proper TV D-pad focus handling and navigation.
+ * Proper TV D-pad focus handling.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
