@@ -24,7 +24,7 @@ fun PlayarrTheme(
         small = RoundedCornerShape(2.dp),
         medium = RoundedCornerShape(4.dp),
         large = RoundedCornerShape(6.dp),
-        button = RoundedCornerShape(8.dp),
+        button = RoundedCornerShape(4.dp),
         full = RoundedCornerShape(50),
     ),
     spacing: PlayarrSpacing = PlayarrSpacing(

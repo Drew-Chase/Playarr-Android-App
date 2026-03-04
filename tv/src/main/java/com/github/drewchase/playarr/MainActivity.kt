@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.NonInteractiveSurfaceDefaults
 import androidx.tv.material3.Surface
 import com.github.drewchase.playarr.screens.DashboardScreen
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
@@ -30,9 +29,6 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     shape = RectangleShape,
-                    colors = NonInteractiveSurfaceDefaults.colors(
-                        containerColor = PlayarrTheme.colors.background
-                    )
                 )
                 {
                     if (!setupComplete.value) {
