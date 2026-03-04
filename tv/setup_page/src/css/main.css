@@ -1,0 +1,115 @@
+:root {
+    --primary-color: #1ce783;
+}
+
+body {
+    margin: 16px;
+    padding: 16px;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #000;
+    color: white;
+    background: linear-gradient(#0B0B0D, #121214);
+    height: calc(100dvh - 16px - 16px - 16px - 16px - 8px);
+    border: 4px solid var(--primary-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#server-url-form {
+    margin-top: 3rem;
+    margin-bottom: auto;
+}
+
+.col {
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    gap: 16px;
+}
+
+input {
+    border: 1px solid transparent;
+    outline: none;
+    background: #1a1a1e;
+    color: white;
+    font-size: 16px;
+    height: 40px;
+    border-radius: 4px;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+input::placeholder {
+    color: white;
+    opacity: 0.25;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: #29292e;
+}
+
+.text-primary {
+    color: var(--primary-color);
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    padding-inline: 1rem;
+    padding-block: 0.5rem;
+    border-radius: 0.2rem;
+}
+
+button.primary {
+    background: var(--primary-color);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+button.linked {
+    background: var(--primary-color);
+    color: black;
+    font-weight: bold;
+}
+
+#plex-code {
+    margin-inline: auto;
+    width: 100%;
+    font-family: monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    border: 3px dashed #1da661;
+    border-radius: 5px;
+    text-align: center;
+    padding-block: 0.5rem;
+    cursor: pointer;
+    color: #c8c8d6;
+    transition: transform 0.15s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+#plex-code.copied {
+    animation: copy-pop 0.5s ease;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+@keyframes copy-pop {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.15); }
+    60% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+.copy-text {
+    color: #91919f;
+    font-weight: bold;
+    text-transform: uppercase;
+}
