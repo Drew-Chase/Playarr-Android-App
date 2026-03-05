@@ -158,6 +158,11 @@ class DashboardScreen {
                     }
                 }
                 else -> {
+                    // Focus the navbar on initial load
+                    LaunchedEffect(Unit) {
+                        navBarFocusRequester.requestFocus()
+                    }
+
                     val heroItems = state.heroItems()
                     Log.d(TAG, "DashboardScreen: composing main content — " +
                             "heroItems=${heroItems.size}, " +
