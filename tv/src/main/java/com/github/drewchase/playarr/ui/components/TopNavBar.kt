@@ -4,9 +4,11 @@ import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -67,10 +71,12 @@ fun TopNavBar(
     activeItem: NavItem = NavItem.HOME,
     onNavItemSelected: (NavItem) -> Unit,
     onLibrarySelected: (PlexLibrary) -> Unit,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val showMovieModal = remember { mutableStateOf(false) }
     val showTvModal = remember { mutableStateOf(false) }
+    val showProfileModal = remember { mutableStateOf(false) }
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
 
@@ -296,7 +302,7 @@ fun TopNavBar(
 
             // User profile button
             Button(
-                onClick = { /* TODO: show user profile */ },
+                onClick = { showProfileModal.value = true },
                 modifier = Modifier
                     .onGloballyPositioned { itemCoords["profile"] = it }
                     .onFocusChanged { focusState ->
@@ -364,6 +370,17 @@ fun TopNavBar(
             },
         )
     }
+
+    if (showProfileModal.value) {
+        ProfileModal(
+            user = user,
+            onDismiss = { showProfileModal.value = false },
+            onSignOut = {
+                showProfileModal.value = false
+                onSignOut()
+            },
+        )
+    }
 }
 
 /**
@@ -419,5 +436,154 @@ private fun NavButton(
             style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.Normal),
             color = textColor,
         )
+    }
+}
+
+private data class ProfileMenuItem(
+    val key: String,
+    val label: String,
+    val isSignOut: Boolean = false,
+    val isHeader: Boolean = false,
+    val onClick: () -> Unit = {},
+)
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ProfileModal(
+    user: PlexUser?,
+    onDismiss: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    val menuItems = remember {
+        listOf(
+            ProfileMenuItem(key = "watch_header", label = "Watch Party", isHeader = true),
+            ProfileMenuItem(key = "create_party", label = "Create Watch Party"),
+            ProfileMenuItem(key = "join_party", label = "Join Watch Party"),
+            ProfileMenuItem(key = "settings", label = "Settings"),
+            ProfileMenuItem(key = "sign_out", label = "Sign Out", isSignOut = true),
+            ProfileMenuItem(key = "cancel", label = "Cancel"),
+        )
+    }
+
+    // Pill indicator state
+    val modalParentCoords = remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val modalItemCoords = remember { mutableStateMapOf<String, LayoutCoordinates>() }
+    val focusedItemKey = remember { mutableStateOf<String?>(null) }
+    val pillInitialized = remember { mutableStateOf(false) }
+
+    val parent = modalParentCoords.value
+    val target = focusedItemKey.value?.let { modalItemCoords[it] }
+    val pillVisible = parent != null && target != null
+            && parent.isAttached && target.isAttached
+
+    val targetPos =
+        if (pillVisible) parent!!.localPositionOf(target!!, Offset.Zero) else Offset.Zero
+    val targetW = if (pillVisible) target!!.size.width.toFloat() else 0f
+    val targetH = if (pillVisible) target!!.size.height.toFloat() else 0f
+
+    val isSignOutFocused = focusedItemKey.value == "sign_out"
+    val pillColor by animateColorAsState(
+        if (isSignOutFocused) PlayarrTheme.colors.statusRed else Color.White,
+        tween(300, easing = FastOutSlowInEasing), label = "modalPillColor",
+    )
+
+    // Snap on first placement so the pill doesn't animate from 0,0
+    val animSpec = if (pillInitialized.value)
+        tween<Float>(300, easing = FastOutSlowInEasing) else snap()
+    val mPillX by animateFloatAsState(targetPos.x, animSpec, label = "mPillX")
+    val mPillY by animateFloatAsState(targetPos.y, animSpec, label = "mPillY")
+    val mPillW by animateFloatAsState(targetW, animSpec, label = "mPillW")
+    val mPillH by animateFloatAsState(targetH, animSpec, label = "mPillH")
+    val mPillAlpha by animateFloatAsState(
+        if (focusedItemKey.value != null) 1f else 0f,
+        if (pillInitialized.value) tween(200) else snap(),
+        label = "mPillAlpha",
+    )
+
+    // Mark initialized after first focus
+    LaunchedEffect(focusedItemKey.value) {
+        if (focusedItemKey.value != null && !pillInitialized.value) {
+            pillInitialized.value = true
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.75f)
+                .padding(32.dp)
+                .onGloballyPositioned { modalParentCoords.value = it }
+                .drawBehind {
+                    if (pillVisible && mPillW > 0f) {
+                        drawRoundRect(
+                            color = pillColor.copy(alpha = mPillAlpha),
+                            topLeft = Offset(mPillX, mPillY),
+                            size = Size(mPillW, mPillH),
+                            cornerRadius = CornerRadius(mPillH / 2f, mPillH / 2f),
+                        )
+                    }
+                },
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // User name header
+            PlayarrText(
+                text = user?.username ?: "Profile",
+                style = PlayarrTheme.typography.headline.copy(fontWeight = FontWeight.Bold),
+                color = PlayarrTheme.colors.foreground,
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            menuItems.forEach { item ->
+                if (item.isHeader) {
+                    PlayarrText(
+                        text = item.label,
+                        style = PlayarrTheme.typography.title.copy(fontWeight = FontWeight.SemiBold),
+                        color = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+                    )
+                } else {
+                    val isFocused = focusedItemKey.value == item.key
+                    val textColor by animateColorAsState(
+                        when {
+                            isFocused && item.isSignOut -> Color.White
+                            isFocused -> PlayarrTheme.colors.background
+                            item.isSignOut -> PlayarrTheme.colors.statusRed
+                            item.key == "cancel" -> PlayarrTheme.colors.foreground.copy(alpha = 0.6f)
+                            else -> PlayarrTheme.colors.foreground
+                        },
+                        tween(300, easing = FastOutSlowInEasing),
+                        label = "modalTextColor_${item.key}",
+                    )
+
+                    Button(
+                        onClick = when {
+                            item.isSignOut -> onSignOut
+                            item.key == "cancel" -> onDismiss
+                            else -> item.onClick
+                        },
+                        modifier = Modifier
+                            .onGloballyPositioned { modalItemCoords[item.key] = it }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) focusedItemKey.value = item.key
+                            },
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            contentColor = textColor,
+                            focusedContainerColor = Color.Transparent,
+                            focusedContentColor = textColor,
+                        ),
+                        shape = ButtonDefaults.shape(shape = PlayarrTheme.shapes.button),
+                    ) {
+                        PlayarrText(
+                            text = item.label,
+                            style = if (item.key == "cancel") PlayarrTheme.typography.lg
+                            else PlayarrTheme.typography.title,
+                            color = textColor,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

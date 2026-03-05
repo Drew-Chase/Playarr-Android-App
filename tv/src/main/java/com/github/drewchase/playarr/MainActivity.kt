@@ -36,7 +36,13 @@ class MainActivity : ComponentActivity() {
                             setupComplete.value = true
                         }).View()
                     } else {
-                        DashboardScreen().View()
+                        DashboardScreen().View(
+                            onSignOut = {
+                                config.serverUrl = null
+                                config.authToken = null
+                                setupComplete.value = false
+                            },
+                        )
                     }
                 }
             }

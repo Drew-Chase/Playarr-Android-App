@@ -68,7 +68,7 @@ class DashboardScreen {
     @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
     @TvPreviews
     @Composable
-    fun View() {
+    fun View(onSignOut: () -> Unit = {}) {
         val context = LocalContext.current
         val config = remember { AppConfiguration(context) }
         val client = remember {
@@ -356,6 +356,7 @@ class DashboardScreen {
                                 }
                             },
                             onLibrarySelected = { /* TODO: navigate to library */ },
+                            onSignOut = onSignOut,
                             modifier = Modifier
                                 .focusRequester(navBarFocusRequester)
                                 .focusProperties {
