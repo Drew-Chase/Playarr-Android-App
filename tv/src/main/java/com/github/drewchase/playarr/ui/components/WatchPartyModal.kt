@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -32,10 +34,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,7 +67,7 @@ import com.github.drewchase.playarr.ui.theme.PlayarrTheme
 
 private enum class WatchPartyTab { CREATE, JOIN }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun WatchPartyModal(
     onDismiss: () -> Unit,
@@ -66,6 +79,8 @@ fun WatchPartyModal(
     val tabItemCoords = remember { mutableStateMapOf<WatchPartyTab, LayoutCoordinates>() }
     val focusedTab = remember { mutableStateOf<WatchPartyTab?>(null) }
     val prevTabTarget = remember { mutableStateOf<WatchPartyTab?>(null) }
+    val tabFocusRequesters = remember { WatchPartyTab.entries.associateWith { FocusRequester() } }
+    val partyNameFocusRequester = remember { FocusRequester() }
 
     val tabParent = tabParentCoords.value
     val tabTarget = focusedTab.value?.let { tabItemCoords[it] }
@@ -179,6 +194,8 @@ fun WatchPartyModal(
                         Button(
                             onClick = { selectedTab.value = tab },
                             modifier = Modifier
+                                .focusRequester(tabFocusRequesters[tab]!!)
+                                .focusProperties { down = partyNameFocusRequester }
                                 .onGloballyPositioned { tabItemCoords[tab] = it }
                                 .onFocusChanged { focusState ->
                                     if (focusState.isFocused) {
@@ -207,7 +224,12 @@ fun WatchPartyModal(
 
                 // Tab content
                 when (selectedTab.value) {
-                    WatchPartyTab.CREATE -> CreateWatchPartyContent(onDismiss = onDismiss)
+                    WatchPartyTab.CREATE -> CreateWatchPartyContent(
+                        onDismiss = onDismiss,
+                        selectedTab = selectedTab.value,
+                        tabFocusRequesters = tabFocusRequesters,
+                        partyNameFocusRequester = partyNameFocusRequester,
+                    )
                     WatchPartyTab.JOIN -> JoinWatchPartyContent()
                 }
             }
@@ -215,12 +237,17 @@ fun WatchPartyModal(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun CreateWatchPartyContent(onDismiss: () -> Unit) {
+private fun CreateWatchPartyContent(
+    onDismiss: () -> Unit,
+    selectedTab: WatchPartyTab,
+    tabFocusRequesters: Map<WatchPartyTab, FocusRequester>,
+    partyNameFocusRequester: FocusRequester,
+) {
     val partyName = remember { mutableStateOf("") }
     val selectedOption = remember { mutableStateOf(0) }
-    val focusedOption = remember { mutableStateOf(-1) }
+    val optFocusRequesters = remember { List(3) { FocusRequester() } }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -232,38 +259,17 @@ private fun CreateWatchPartyContent(onDismiss: () -> Unit) {
                 style = PlayarrTheme.typography.sm,
                 color = PlayarrTheme.colors.foreground.copy(alpha = 0.6f),
             )
-            BasicTextField(
+            TvTextField(
                 value = partyName.value,
                 onValueChange = { partyName.value = it },
-                textStyle = PlayarrTheme.typography.base.copy(
-                    color = PlayarrTheme.colors.foreground,
-                ),
-                cursorBrush = SolidColor(PlayarrTheme.colors.primary),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                PlayarrTheme.colors.content2,
-                                RoundedCornerShape(8.dp),
-                            )
-                            .border(
-                                1.dp,
-                                PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                    ) {
-                        if (partyName.value.isEmpty()) {
-                            PlayarrText(
-                                text = "Movie Night",
-                                style = PlayarrTheme.typography.base,
-                                color = PlayarrTheme.colors.foreground.copy(alpha = 0.3f),
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
+                placeholder = "Movie Night",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(partyNameFocusRequester)
+                    .focusProperties {
+                        up = tabFocusRequesters[selectedTab]!!
+                        down = optFocusRequesters[selectedOption.value]
+                    },
             )
             PlayarrText(
                 text = "Optional - defaults to username's party",
@@ -286,66 +292,92 @@ private fun CreateWatchPartyContent(onDismiss: () -> Unit) {
                 "Select Users" to "Choose specific users from your server",
             )
 
-            options.forEachIndexed { index, (title, description) ->
-                val isSelected = selectedOption.value == index
-                val isFocused = focusedOption.value == index
+            // Pill indicator for options
+            val optParentCoords = remember { mutableStateOf<LayoutCoordinates?>(null) }
+            val optItemCoords = remember { mutableStateMapOf<Int, LayoutCoordinates>() }
+            val prevOptTarget = remember { mutableStateOf<Int?>(null) }
 
-                Button(
-                    onClick = { selectedOption.value = index },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { focusState ->
-                            focusedOption.value = if (focusState.isFocused) index else focusedOption.value
-                        },
-                    colors = ButtonDefaults.colors(
-                        containerColor = Color.Transparent,
-                        contentColor = PlayarrTheme.colors.foreground,
-                        focusedContainerColor = PlayarrTheme.colors.content2,
-                        focusedContentColor = PlayarrTheme.colors.foreground,
-                    ),
-                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
+            val optParent = optParentCoords.value
+            val optTarget = optItemCoords[selectedOption.value]
+            val optPillVisible = optParent != null && optTarget != null
+                    && optParent.isAttached && optTarget.isAttached
+
+            val optTargetPos =
+                if (optPillVisible) optParent!!.localPositionOf(optTarget!!, Offset.Zero) else Offset.Zero
+            val optTargetW = if (optPillVisible) optTarget!!.size.width.toFloat() else 0f
+            val optTargetH = if (optPillVisible) optTarget!!.size.height.toFloat() else 0f
+
+            val isFirstOptPlacement = prevOptTarget.value == null && optPillVisible
+            val optAnimSpec: AnimationSpec<Float> =
+                if (isFirstOptPlacement) snap() else tween(300, easing = FastOutSlowInEasing)
+
+            LaunchedEffect(selectedOption.value) {
+                prevOptTarget.value = selectedOption.value
+            }
+
+            val oPillX by animateFloatAsState(optTargetPos.x, optAnimSpec, label = "oPillX")
+            val oPillY by animateFloatAsState(optTargetPos.y, optAnimSpec, label = "oPillY")
+            val oPillW by animateFloatAsState(optTargetW, optAnimSpec, label = "oPillW")
+            val oPillH by animateFloatAsState(optTargetH, optAnimSpec, label = "oPillH")
+
+            Row(
+                modifier = Modifier
+                    .background(PlayarrTheme.colors.content2, RoundedCornerShape(8.dp))
+                    .padding(4.dp)
+                    .onGloballyPositioned { optParentCoords.value = it }
+                    .drawBehind {
+                        if (optPillVisible && oPillW > 0f) {
+                            drawRoundRect(
+                                color = Color(0xFF1CE783),
+                                topLeft = Offset(oPillX, oPillY),
+                                size = Size(oPillW, oPillH),
+                                cornerRadius = CornerRadius(oPillH / 2f, oPillH / 2f),
+                            )
+                        }
+                    },
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                options.forEachIndexed { index, (title, _) ->
+                    val isSelected = selectedOption.value == index
+                    val optTextColor by animateColorAsState(
+                        if (isSelected) PlayarrTheme.colors.primaryForeground
+                        else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+                        tween(300, easing = FastOutSlowInEasing),
+                        label = "optColor_$index",
+                    )
+
+                    Button(
+                        onClick = { selectedOption.value = index },
+                        modifier = Modifier
+                            .focusRequester(optFocusRequesters[index])
+                            .focusProperties { up = partyNameFocusRequester }
+                            .onGloballyPositioned { optItemCoords[index] = it }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) selectedOption.value = index
+                            },
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            contentColor = optTextColor,
+                            focusedContainerColor = Color.Transparent,
+                            focusedContentColor = optTextColor,
+                        ),
+                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
                     ) {
-                        // Radio circle
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .border(
-                                    2.dp,
-                                    if (isSelected) PlayarrTheme.colors.primary
-                                    else PlayarrTheme.colors.foreground.copy(alpha = 0.3f),
-                                    CircleShape,
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(PlayarrTheme.colors.primary, CircleShape),
-                                )
-                            }
-                        }
-
-                        Column {
-                            PlayarrText(
-                                text = title,
-                                style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.SemiBold),
-                                color = PlayarrTheme.colors.foreground,
-                            )
-                            PlayarrText(
-                                text = description,
-                                style = PlayarrTheme.typography.sm,
-                                color = PlayarrTheme.colors.foreground.copy(alpha = 0.5f),
-                            )
-                        }
+                        PlayarrText(
+                            text = title,
+                            style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.SemiBold),
+                            color = optTextColor,
+                        )
                     }
                 }
             }
+
+            // Description for selected option
+            PlayarrText(
+                text = options[selectedOption.value].second,
+                style = PlayarrTheme.typography.sm,
+                color = PlayarrTheme.colors.foreground.copy(alpha = 0.5f),
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -404,51 +436,18 @@ private fun JoinWatchPartyContent() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BasicTextField(
+            TvTextField(
                 value = inviteCode.value,
                 onValueChange = { inviteCode.value = it },
-                textStyle = PlayarrTheme.typography.base.copy(
-                    color = PlayarrTheme.colors.foreground,
-                ),
-                cursorBrush = SolidColor(PlayarrTheme.colors.primary),
+                placeholder = "Enter invite code...",
                 modifier = Modifier.weight(1f),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                PlayarrTheme.colors.content2,
-                                RoundedCornerShape(8.dp),
-                            )
-                            .border(
-                                1.dp,
-                                PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = PlayarrTheme.colors.foreground.copy(alpha = 0.4f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Box {
-                                if (inviteCode.value.isEmpty()) {
-                                    PlayarrText(
-                                        text = "Enter invite code...",
-                                        style = PlayarrTheme.typography.base,
-                                        color = PlayarrTheme.colors.foreground.copy(alpha = 0.3f),
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        }
-                    }
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = PlayarrTheme.colors.foreground.copy(alpha = 0.4f),
+                        modifier = Modifier.size(18.dp),
+                    )
                 },
             )
 
@@ -477,4 +476,109 @@ private fun JoinWatchPartyContent() {
             )
         }
     }
+}
+
+/**
+ * A text field designed for TV D-pad navigation.
+ * Renders as a single BasicTextField that starts in readOnly mode.
+ * Press select (DpadCenter/Enter) to activate editing and show keyboard.
+ * Press Done on keyboard or lose focus to return to readOnly mode.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun TvTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: @Composable (() -> Unit)? = null,
+) {
+    val isEditing = remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isFocused = remember { mutableStateOf(false) }
+
+    val borderColor by animateColorAsState(
+        when {
+            isEditing.value -> PlayarrTheme.colors.primary
+            isFocused.value -> PlayarrTheme.colors.foreground.copy(alpha = 0.5f)
+            else -> PlayarrTheme.colors.foreground.copy(alpha = 0.1f)
+        },
+        tween(200),
+        label = "tvTextFieldBorder",
+    )
+
+    // Show keyboard when entering edit mode
+    LaunchedEffect(isEditing.value) {
+        if (isEditing.value) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        readOnly = !isEditing.value,
+        textStyle = PlayarrTheme.typography.base.copy(
+            color = PlayarrTheme.colors.foreground,
+        ),
+        cursorBrush = SolidColor(
+            if (isEditing.value) PlayarrTheme.colors.primary else Color.Transparent,
+        ),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(
+            onDone = {
+                isEditing.value = false
+                keyboardController?.hide()
+            },
+        ),
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { focusState ->
+                isFocused.value = focusState.hasFocus
+                if (!focusState.hasFocus && isEditing.value) {
+                    isEditing.value = false
+                    keyboardController?.hide()
+                }
+            }
+            .onPreviewKeyEvent { keyEvent ->
+                if (!isEditing.value
+                    && keyEvent.type == KeyEventType.KeyDown
+                    && (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)
+                ) {
+                    isEditing.value = true
+                    true
+                } else {
+                    false
+                }
+            },
+        decorationBox = { innerTextField ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PlayarrTheme.colors.content2, RoundedCornerShape(8.dp))
+                    .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    leadingIcon?.invoke()
+                    Box {
+                        if (value.isEmpty()) {
+                            PlayarrText(
+                                text = placeholder,
+                                style = PlayarrTheme.typography.base,
+                                color = PlayarrTheme.colors.foreground.copy(alpha = 0.3f),
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            }
+        },
+    )
 }
