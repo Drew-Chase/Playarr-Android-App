@@ -15,8 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -24,6 +23,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -42,7 +45,6 @@ import com.github.drewchase.playarr.ui.components.createPlayarrImageLoader
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
 import com.github.drewchase.playarr.ui.theme.TvPreviews
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val TAG = "PlayarrFocus"
@@ -71,17 +73,19 @@ class DashboardScreen {
         val navBarFocusRequester = remember { FocusRequester() }
         val moreInfoFocusRequester = remember { FocusRequester() }
         val lazyListState = rememberLazyListState()
-        val scope = rememberCoroutineScope()
         val carouselFocused = remember { mutableStateOf(false) }
 
-        // Lock scroll to top while carousel has focus — prevents BringIntoView from scrolling down
-        LaunchedEffect(carouselFocused.value) {
-            if (carouselFocused.value) {
-                snapshotFlow {
-                    lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
-                }.collect { (index, offset) ->
-                    if (index != 0 || offset != 0) {
-                        lazyListState.scrollToItem(0, 0)
+        // Block LazyColumn scroll while carousel has focus and list is at top.
+        // This intercepts BringIntoView's scroll dispatch in onPreScroll,
+        // preventing any visible flicker. When focus leaves the carousel,
+        // carouselFocused flips to false before the next item's BringIntoView fires.
+        val carouselScrollLock = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    return if (carouselFocused.value) {
+                        Offset(0f, available.y) // consume all vertical scroll
+                    } else {
+                        Offset.Zero
                     }
                 }
             }
@@ -134,6 +138,7 @@ class DashboardScreen {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .nestedScroll(carouselScrollLock)
                             .onFocusChanged { focusState ->
                                 Log.d(TAG, "DashboardScreen(Box): onFocusChanged — " +
                                         "isFocused=${focusState.isFocused}, " +
