@@ -57,6 +57,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import com.github.drewchase.playarr.commonlib.PlayarrClient
 import com.github.drewchase.playarr.commonlib.data.PlexLibrary
 import com.github.drewchase.playarr.commonlib.data.PlexUser
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
@@ -73,6 +74,7 @@ fun TopNavBar(
     user: PlexUser?,
     libraries: List<PlexLibrary>,
     imageLoader: ImageLoader,
+    client: PlayarrClient,
     activeItem: NavItem = NavItem.HOME,
     onNavItemSelected: (NavItem) -> Unit,
     onLibrarySelected: (PlexLibrary) -> Unit,
@@ -394,6 +396,7 @@ fun TopNavBar(
 
     if (showWatchPartyModal.value) {
         WatchPartyModal(
+            client = client,
             onDismiss = { showWatchPartyModal.value = false },
         )
     }

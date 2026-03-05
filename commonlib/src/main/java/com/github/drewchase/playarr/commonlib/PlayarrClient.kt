@@ -4,8 +4,10 @@ import com.github.drewchase.playarr.commonlib.data.*
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class PlayarrClient(
     val playarrConnectionUrl: String,
@@ -24,6 +26,8 @@ class PlayarrClient(
     private val gson = GsonBuilder()
         .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
         .create()
+
+    private val gsonCamelCase = GsonBuilder().create()
 
     // -- Server status --
 
@@ -74,6 +78,40 @@ class PlayarrClient(
         return getList("/api/search?q=$encoded")
     }
 
+    // -- Watch Party --
+
+    fun createWatchParty(request: CreateWatchPartyRequest): WatchRoom {
+        return post("/api/watch-party/rooms", request, WatchRoom::class.java)
+    }
+
+    fun listWatchPartyRooms(): List<WatchRoom> {
+        return getList("/api/watch-party/rooms")
+    }
+
+    fun getWatchPartyRoom(roomId: String): WatchRoom {
+        return get("/api/watch-party/rooms/$roomId", WatchRoom::class.java)
+    }
+
+    fun deleteWatchPartyRoom(roomId: String): Boolean {
+        return delete("/api/watch-party/rooms/$roomId")
+    }
+
+    fun joinByInviteCode(code: String): WatchRoom {
+        return get("/api/watch-party/join/$code", WatchRoom::class.java)
+    }
+
+    fun kickUser(roomId: String, userId: Long, reason: String? = null): Boolean {
+        val body = mapOf("user_id" to userId, "reason" to reason)
+        post("/api/watch-party/rooms/$roomId/kick", body, Map::class.java)
+        return true
+    }
+
+    // -- Plex Users --
+
+    fun getPlexUsers(): List<PlexServerUser> {
+        return getList("/api/plex/users")
+    }
+
     // -- Image URL builders --
 
     fun getThumbUrl(ratingKey: String): String {
@@ -109,5 +147,26 @@ class PlayarrClient(
         val body = response.body.string()
         val type = TypeToken.getParameterized(List::class.java, T::class.java).type
         return gson.fromJson(body, type) ?: emptyList()
+    }
+
+    private fun <T> post(path: String, requestBody: Any, clazz: Class<T>): T {
+        val json = gsonCamelCase.toJson(requestBody)
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val request = Request.Builder()
+            .url("${playarrConnectionUrl}$path")
+            .post(json.toRequestBody(mediaType))
+            .build()
+        val response = client.newCall(request).execute()
+        val body = response.body.string()
+        return gson.fromJson(body, clazz)
+    }
+
+    private fun delete(path: String): Boolean {
+        val request = Request.Builder()
+            .url("${playarrConnectionUrl}$path")
+            .delete()
+            .build()
+        val response = client.newCall(request).execute()
+        return response.isSuccessful
     }
 }

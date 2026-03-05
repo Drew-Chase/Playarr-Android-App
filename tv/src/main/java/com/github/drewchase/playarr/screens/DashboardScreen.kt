@@ -350,6 +350,7 @@ class DashboardScreen {
                             user = state.user,
                             libraries = state.libraries,
                             imageLoader = imageLoader,
+                            client = client,
                             onNavItemSelected = { navItem ->
                                 if (navItem == NavItem.SEARCH) {
                                     showSearch.value = true
