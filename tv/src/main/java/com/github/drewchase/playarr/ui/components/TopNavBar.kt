@@ -82,6 +82,7 @@ fun TopNavBar(
     val showMovieModal = remember { mutableStateOf(false) }
     val showTvModal = remember { mutableStateOf(false) }
     val showProfileModal = remember { mutableStateOf(false) }
+    val showWatchPartyModal = remember { mutableStateOf(false) }
     val movieLibraries = libraries.filter { it.type == "movie" }
     val tvLibraries = libraries.filter { it.type == "show" }
 
@@ -384,6 +385,16 @@ fun TopNavBar(
                 showProfileModal.value = false
                 onSignOut()
             },
+            onWatchParty = {
+                showProfileModal.value = false
+                showWatchPartyModal.value = true
+            },
+        )
+    }
+
+    if (showWatchPartyModal.value) {
+        WatchPartyModal(
+            onDismiss = { showWatchPartyModal.value = false },
         )
     }
 }
@@ -458,10 +469,11 @@ private fun ProfileModal(
     user: PlexUser?,
     onDismiss: () -> Unit,
     onSignOut: () -> Unit,
+    onWatchParty: () -> Unit = {},
 ) {
     val menuItems = remember {
         listOf(
-            ProfileMenuItem(key = "watch_parties", label = "Watch Parties"),
+            ProfileMenuItem(key = "watch_parties", label = "Watch Parties", onClick = onWatchParty),
             ProfileMenuItem(key = "settings", label = "Settings"),
             ProfileMenuItem(key = "sign_out", label = "Sign Out", isSignOut = true),
         )
