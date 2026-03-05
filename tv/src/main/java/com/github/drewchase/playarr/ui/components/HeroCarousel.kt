@@ -3,6 +3,8 @@ package com.github.drewchase.playarr.ui.components
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,17 +14,21 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
@@ -48,7 +54,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Carousel
-import androidx.tv.material3.CarouselDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.rememberCarouselState
@@ -287,9 +292,10 @@ fun HeroCarousel(
                     false
                 },
             carouselIndicator = {
-                CarouselDefaults.IndicatorRow(
+                CarouselPillIndicator(
                     itemCount = items.size,
                     activeItemIndex = carouselState.activeItemIndex,
+                    paused = carouselHasFocus.value,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 48.dp, bottom = 16.dp),
@@ -350,6 +356,96 @@ fun HeroCarousel(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+private const val AUTO_SCROLL_DURATION_MS = 5000
+
+/**
+ * Custom carousel indicator with expanded active pill and progress fill.
+ * Inactive items are small dots; the active item is a wider pill with
+ * a progress bar that fills over the auto-scroll duration.
+ */
+@Composable
+private fun CarouselPillIndicator(
+    itemCount: Int,
+    activeItemIndex: Int,
+    paused: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val pillHeight = 8.dp
+    val dotSize = 8.dp
+    val activePillWidth = 40.dp
+    val progress = remember { Animatable(0f) }
+
+    // Reset and animate progress when active item changes
+    LaunchedEffect(activeItemIndex) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = AUTO_SCROLL_DURATION_MS,
+                easing = LinearEasing,
+            ),
+        )
+    }
+
+    // Pause/resume: stop animation when focused, resume remaining when unfocused
+    LaunchedEffect(paused) {
+        if (paused) {
+            progress.stop()
+        } else if (progress.value < 1f) {
+            val remaining = 1f - progress.value
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = (AUTO_SCROLL_DURATION_MS * remaining).toInt(),
+                    easing = LinearEasing,
+                ),
+            )
+        }
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier,
+    ) {
+        repeat(itemCount) { index ->
+            val isActive = index == activeItemIndex
+            if (isActive) {
+                // Active pill with progress fill
+                Box(
+                    modifier = Modifier
+                        .width(activePillWidth)
+                        .height(pillHeight)
+                        .background(
+                            Color.White.copy(alpha = 0.3f),
+                            RoundedCornerShape(50),
+                        ),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress.value)
+                            .background(
+                                Color.White,
+                                RoundedCornerShape(50),
+                            ),
+                    )
+                }
+            } else {
+                // Inactive dot
+                Box(
+                    modifier = Modifier
+                        .size(dotSize)
+                        .background(
+                            Color.White.copy(alpha = 0.5f),
+                            CircleShape,
+                        ),
+                )
             }
         }
     }

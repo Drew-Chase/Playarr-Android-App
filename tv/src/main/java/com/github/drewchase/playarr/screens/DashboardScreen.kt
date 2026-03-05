@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -24,6 +25,11 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -45,6 +51,7 @@ import com.github.drewchase.playarr.ui.components.createPlayarrImageLoader
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
 import com.github.drewchase.playarr.ui.theme.TvPreviews
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val TAG = "PlayarrFocus"
@@ -75,22 +82,30 @@ class DashboardScreen {
         val lazyListState = rememberLazyListState()
         val carouselFocused = remember { mutableStateOf(false) }
 
-        // Block LazyColumn scroll while carousel has focus and list is at top.
-        // This intercepts BringIntoView's scroll dispatch in onPreScroll,
-        // preventing any visible flicker. When focus leaves the carousel,
-        // carouselFocused flips to false before the next item's BringIntoView fires.
+        // Block all LazyColumn scroll while carousel or navbar has focus.
+        // This prevents BringIntoView from scrolling to center the More Info
+        // button — both when entering the carousel and when briefly passing
+        // through it on the way up to the navbar.
+        val navBarFocused = remember { mutableStateOf(false) }
+        // Track intentional D-pad down presses to allow scroll through the lock
+        val dpadDownPressed = remember { mutableStateOf(false) }
         val carouselScrollLock = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    // Only block scroll when carousel has focus AND list is already at the top.
-                    // available.y > 0 = scrolling content down (revealing above) — allow this
-                    // available.y < 0 = scrolling content up (revealing below) — block at top
+                    if (!carouselFocused.value && !navBarFocused.value) return Offset.Zero
+                    // Allow scroll when user intentionally pressed D-pad down
+                    // Don't reset — BringIntoView needs multiple scroll increments
+                    if (dpadDownPressed.value) return Offset.Zero
                     val atTop = lazyListState.firstVisibleItemIndex == 0
                             && lazyListState.firstVisibleItemScrollOffset == 0
-                    return if (carouselFocused.value && atTop && available.y < 0) {
-                        Offset(0f, available.y)
+                    // At top: block downward scroll (BringIntoView centering the button)
+                    // Not at top: allow upward scroll (bringing carousel back into view)
+                    return if (atTop) {
+                        Offset(0f, available.y) // consume everything at top
+                    } else if (available.y > 0) {
+                        Offset.Zero // allow scroll toward top
                     } else {
-                        Offset.Zero
+                        Offset(0f, available.y) // block further downward scroll
                     }
                 }
             }
@@ -103,6 +118,8 @@ class DashboardScreen {
             }
             dashboardState.value = state
         }
+
+        val scope = rememberCoroutineScope()
 
         PlayarrTheme {
             val state = dashboardState.value
@@ -144,6 +161,22 @@ class DashboardScreen {
                         modifier = Modifier
                             .fillMaxSize()
                             .nestedScroll(carouselScrollLock)
+                            .onPreviewKeyEvent { keyEvent ->
+                                // Detect intentional D-pad down while carousel has focus
+                                // so the scroll lock allows the resulting BringIntoView scroll
+                                if (keyEvent.key == Key.DirectionDown
+                                    && keyEvent.type == KeyEventType.KeyDown
+                                    && carouselFocused.value
+                                ) {
+                                    dpadDownPressed.value = true
+                                    // Also programmatically scroll to ensure Continue Watching
+                                    // is visible, in case BringIntoView can't find it
+                                    scope.launch {
+                                        lazyListState.animateScrollToItem(1)
+                                    }
+                                }
+                                false // never consume — let the event propagate normally
+                            }
                             .onFocusChanged { focusState ->
                                 Log.d(TAG, "DashboardScreen(Box): onFocusChanged — " +
                                         "isFocused=${focusState.isFocused}, " +
@@ -179,6 +212,7 @@ class DashboardScreen {
                                             }
                                             .onFocusChanged {
                                                 carouselFocused.value = it.hasFocus
+                                                if (!it.hasFocus) dpadDownPressed.value = false
                                             },
                                         navBarFocusRequester = navBarFocusRequester,
                                         moreInfoFocusRequester = moreInfoFocusRequester,
@@ -303,6 +337,9 @@ class DashboardScreen {
                                 .focusRequester(navBarFocusRequester)
                                 .focusProperties {
                                     down = moreInfoFocusRequester
+                                }
+                                .onFocusChanged {
+                                    navBarFocused.value = it.hasFocus
                                 },
                         )
 
