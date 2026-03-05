@@ -102,6 +102,12 @@ fun HeroCarousel(
             .height(520.dp)
             .onFocusChanged { focusState ->
                 carouselHasFocus.value = focusState.hasFocus
+                // When the Carousel itself gets focus (not a child), redirect to More Info
+                if (focusState.isFocused && moreInfoFocusRequester != null) {
+                    try {
+                        moreInfoFocusRequester.requestFocus()
+                    } catch (_: IllegalStateException) { }
+                }
                 Log.d(TAG, "HeroCarousel(Carousel): onFocusChanged — " +
                         "isFocused=${focusState.isFocused}, " +
                         "hasFocus=${focusState.hasFocus}")

@@ -82,8 +82,13 @@ class DashboardScreen {
         val carouselScrollLock = remember {
             object : NestedScrollConnection {
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    return if (carouselFocused.value) {
-                        Offset(0f, available.y) // consume all vertical scroll
+                    // Only block scroll when carousel has focus AND list is already at the top.
+                    // available.y > 0 = scrolling content down (revealing above) — allow this
+                    // available.y < 0 = scrolling content up (revealing below) — block at top
+                    val atTop = lazyListState.firstVisibleItemIndex == 0
+                            && lazyListState.firstVisibleItemScrollOffset == 0
+                    return if (carouselFocused.value && atTop && available.y < 0) {
+                        Offset(0f, available.y)
                     } else {
                         Offset.Zero
                     }
