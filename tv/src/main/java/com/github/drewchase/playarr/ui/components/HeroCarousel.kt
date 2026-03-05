@@ -16,12 +16,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,6 +61,7 @@ fun HeroCarousel(
     onInfoClick: (PlexMediaItem) -> Unit,
     modifier: Modifier = Modifier,
     navBarFocusRequester: FocusRequester? = null,
+    moreInfoFocusRequester: FocusRequester? = null,
 ) {
     if (items.isEmpty()) {
         Log.w(TAG, "HeroCarousel: items is EMPTY, returning early")
@@ -67,15 +72,23 @@ fun HeroCarousel(
 
     val backgroundColor = PlayarrTheme.colors.background
     val carouselState = rememberCarouselState()
+    val carouselHasFocus = remember { mutableStateOf(false) }
 
-    // Modifier applied to focusable buttons inside the carousel.
-    // exit → FocusRequester.Default lets focus leave the Carousel in any direction.
-    // up → navBarFocusRequester explicitly wires D-pad Up to the nav bar.
-    val carouselButtonFocusModifier = Modifier.focusProperties {
-        exit = { direction ->
-            Log.d(TAG, "HeroCarousel: focusProperties.exit called, direction=$direction")
-            FocusRequester.Default
+    // Refocus More Info button when carousel slide changes while focused
+    LaunchedEffect(carouselState.activeItemIndex) {
+        if (carouselHasFocus.value && moreInfoFocusRequester != null) {
+            try {
+                moreInfoFocusRequester.requestFocus()
+            } catch (_: IllegalStateException) {
+                // FocusRequester not yet attached to new slide
+            }
         }
+    }
+
+    val carouselButtonFocusModifier = Modifier.focusProperties {
+        // Block left/right so the Carousel handles slide navigation via key events
+        left = FocusRequester.Cancel
+        right = FocusRequester.Cancel
         if (navBarFocusRequester != null) {
             up = navBarFocusRequester
         }
@@ -88,6 +101,7 @@ fun HeroCarousel(
             .fillMaxWidth()
             .height(520.dp)
             .onFocusChanged { focusState ->
+                carouselHasFocus.value = focusState.hasFocus
                 Log.d(TAG, "HeroCarousel(Carousel): onFocusChanged — " +
                         "isFocused=${focusState.isFocused}, " +
                         "hasFocus=${focusState.hasFocus}")
@@ -231,7 +245,8 @@ fun HeroCarousel(
                     PlayarrButton(
                         onClick = { onInfoClick(item) },
                         style = PlayarrButtonStyle.OUTLINE,
-                        modifier = carouselButtonFocusModifier
+                        modifier = (if (moreInfoFocusRequester != null) Modifier.focusRequester(moreInfoFocusRequester) else Modifier)
+                            .then(carouselButtonFocusModifier)
                             .onFocusChanged { focusState ->
                                 Log.d(TAG, "HeroCarousel(MoreInfoButton): onFocusChanged — " +
                                         "isFocused=${focusState.isFocused}, " +

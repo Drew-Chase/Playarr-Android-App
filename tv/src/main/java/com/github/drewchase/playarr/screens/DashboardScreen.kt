@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -39,6 +42,7 @@ import com.github.drewchase.playarr.ui.components.createPlayarrImageLoader
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
 import com.github.drewchase.playarr.ui.theme.TvPreviews
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val TAG = "PlayarrFocus"
@@ -65,6 +69,23 @@ class DashboardScreen {
         // FocusRequesters for explicit nav <-> carousel wiring
         val carouselFocusRequester = remember { FocusRequester() }
         val navBarFocusRequester = remember { FocusRequester() }
+        val moreInfoFocusRequester = remember { FocusRequester() }
+        val lazyListState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val carouselFocused = remember { mutableStateOf(false) }
+
+        // Lock scroll to top while carousel has focus — prevents BringIntoView from scrolling down
+        LaunchedEffect(carouselFocused.value) {
+            if (carouselFocused.value) {
+                snapshotFlow {
+                    lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset
+                }.collect { (index, offset) ->
+                    if (index != 0 || offset != 0) {
+                        lazyListState.scrollToItem(0, 0)
+                    }
+                }
+            }
+        }
 
         // Load data on first composition
         LaunchedEffect(Unit) {
@@ -121,6 +142,7 @@ class DashboardScreen {
                     ) {
                         // Main content: single scrollable list so carousel slides up on navigate-down
                         LazyColumn(
+                            state = lazyListState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .onFocusChanged { focusState ->
@@ -144,8 +166,12 @@ class DashboardScreen {
                                             .focusRequester(carouselFocusRequester)
                                             .focusProperties {
                                                 up = navBarFocusRequester
+                                            }
+                                            .onFocusChanged {
+                                                carouselFocused.value = it.hasFocus
                                             },
                                         navBarFocusRequester = navBarFocusRequester,
+                                        moreInfoFocusRequester = moreInfoFocusRequester,
                                     )
                                 }
                             }
@@ -266,7 +292,7 @@ class DashboardScreen {
                             modifier = Modifier
                                 .focusRequester(navBarFocusRequester)
                                 .focusProperties {
-                                    down = carouselFocusRequester
+                                    down = moreInfoFocusRequester
                                 },
                         )
 
