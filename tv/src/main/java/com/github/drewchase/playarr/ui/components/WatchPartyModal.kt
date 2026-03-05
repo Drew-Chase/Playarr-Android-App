@@ -292,22 +292,22 @@ private fun CreateWatchPartyContent(
                 "Select Users" to "Choose specific users from your server",
             )
 
-            // Pill indicator for options
+            // Underline indicator for options
             val optParentCoords = remember { mutableStateOf<LayoutCoordinates?>(null) }
             val optItemCoords = remember { mutableStateMapOf<Int, LayoutCoordinates>() }
             val prevOptTarget = remember { mutableStateOf<Int?>(null) }
 
             val optParent = optParentCoords.value
             val optTarget = optItemCoords[selectedOption.value]
-            val optPillVisible = optParent != null && optTarget != null
+            val optVisible = optParent != null && optTarget != null
                     && optParent.isAttached && optTarget.isAttached
 
             val optTargetPos =
-                if (optPillVisible) optParent!!.localPositionOf(optTarget!!, Offset.Zero) else Offset.Zero
-            val optTargetW = if (optPillVisible) optTarget!!.size.width.toFloat() else 0f
-            val optTargetH = if (optPillVisible) optTarget!!.size.height.toFloat() else 0f
+                if (optVisible) optParent!!.localPositionOf(optTarget!!, Offset.Zero) else Offset.Zero
+            val optTargetW = if (optVisible) optTarget!!.size.width.toFloat() else 0f
+            val optTargetH = if (optVisible) optTarget!!.size.height.toFloat() else 0f
 
-            val isFirstOptPlacement = prevOptTarget.value == null && optPillVisible
+            val isFirstOptPlacement = prevOptTarget.value == null && optVisible
             val optAnimSpec: AnimationSpec<Float> =
                 if (isFirstOptPlacement) snap() else tween(300, easing = FastOutSlowInEasing)
 
@@ -315,23 +315,21 @@ private fun CreateWatchPartyContent(
                 prevOptTarget.value = selectedOption.value
             }
 
-            val oPillX by animateFloatAsState(optTargetPos.x, optAnimSpec, label = "oPillX")
-            val oPillY by animateFloatAsState(optTargetPos.y, optAnimSpec, label = "oPillY")
-            val oPillW by animateFloatAsState(optTargetW, optAnimSpec, label = "oPillW")
-            val oPillH by animateFloatAsState(optTargetH, optAnimSpec, label = "oPillH")
+            val oLineX by animateFloatAsState(optTargetPos.x, optAnimSpec, label = "oLineX")
+            val oLineW by animateFloatAsState(optTargetW, optAnimSpec, label = "oLineW")
+            val oLineY = optTargetPos.y + optTargetH
 
             Row(
                 modifier = Modifier
-                    .background(PlayarrTheme.colors.content2, RoundedCornerShape(8.dp))
-                    .padding(4.dp)
                     .onGloballyPositioned { optParentCoords.value = it }
                     .drawBehind {
-                        if (optPillVisible && oPillW > 0f) {
+                        if (optVisible && oLineW > 0f) {
+                            val lineHeight = 2.dp.toPx()
                             drawRoundRect(
                                 color = Color(0xFF1CE783),
-                                topLeft = Offset(oPillX, oPillY),
-                                size = Size(oPillW, oPillH),
-                                cornerRadius = CornerRadius(oPillH / 2f, oPillH / 2f),
+                                topLeft = Offset(oLineX, oLineY - lineHeight),
+                                size = Size(oLineW, lineHeight),
+                                cornerRadius = CornerRadius(lineHeight / 2f, lineHeight / 2f),
                             )
                         }
                     },
@@ -340,8 +338,8 @@ private fun CreateWatchPartyContent(
                 options.forEachIndexed { index, (title, _) ->
                     val isSelected = selectedOption.value == index
                     val optTextColor by animateColorAsState(
-                        if (isSelected) PlayarrTheme.colors.primaryForeground
-                        else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+                        if (isSelected) PlayarrTheme.colors.foreground
+                        else PlayarrTheme.colors.foreground.copy(alpha = 0.5f),
                         tween(300, easing = FastOutSlowInEasing),
                         label = "optColor_$index",
                     )
