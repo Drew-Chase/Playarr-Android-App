@@ -2,13 +2,18 @@ package com.github.drewchase.playarr.ui.components
 
 import android.util.Log
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -456,12 +461,9 @@ private fun ProfileModal(
 ) {
     val menuItems = remember {
         listOf(
-            ProfileMenuItem(key = "watch_header", label = "Watch Party", isHeader = true),
-            ProfileMenuItem(key = "create_party", label = "Create Watch Party"),
-            ProfileMenuItem(key = "join_party", label = "Join Watch Party"),
+            ProfileMenuItem(key = "watch_parties", label = "Watch Parties"),
             ProfileMenuItem(key = "settings", label = "Settings"),
             ProfileMenuItem(key = "sign_out", label = "Sign Out", isSignOut = true),
-            ProfileMenuItem(key = "cancel", label = "Cancel"),
         )
     }
 
@@ -469,7 +471,8 @@ private fun ProfileModal(
     val modalParentCoords = remember { mutableStateOf<LayoutCoordinates?>(null) }
     val modalItemCoords = remember { mutableStateMapOf<String, LayoutCoordinates>() }
     val focusedItemKey = remember { mutableStateOf<String?>(null) }
-    val pillInitialized = remember { mutableStateOf(false) }
+    // Track previous pill position so we can detect first placement
+    val prevPillTarget = remember { mutableStateOf<String?>(null) }
 
     val parent = modalParentCoords.value
     val target = focusedItemKey.value?.let { modalItemCoords[it] }
@@ -478,8 +481,19 @@ private fun ProfileModal(
 
     val targetPos =
         if (pillVisible) parent!!.localPositionOf(target!!, Offset.Zero) else Offset.Zero
-    val targetW = if (pillVisible) target!!.size.width.toFloat() else 0f
-    val targetH = if (pillVisible) target!!.size.height.toFloat() else 0f
+    val targetW = if (pillVisible) target.size.width.toFloat() else 0f
+    val targetH = if (pillVisible) target.size.height.toFloat() else 0f
+
+    // Use snap when this is the first focused item (no previous target to animate from)
+    val isFirstPlacement = prevPillTarget.value == null && focusedItemKey.value != null
+    val animSpec: AnimationSpec<Float> = if (isFirstPlacement) snap() else tween(300, easing = FastOutSlowInEasing)
+
+    // Update previous target after computing animSpec
+    LaunchedEffect(focusedItemKey.value) {
+        if (focusedItemKey.value != null) {
+            prevPillTarget.value = focusedItemKey.value
+        }
+    }
 
     val isSignOutFocused = focusedItemKey.value == "sign_out"
     val pillColor by animateColorAsState(
@@ -487,36 +501,24 @@ private fun ProfileModal(
         tween(300, easing = FastOutSlowInEasing), label = "modalPillColor",
     )
 
-    // Snap on first placement so the pill doesn't animate from 0,0
-    val animSpec = if (pillInitialized.value)
-        tween<Float>(300, easing = FastOutSlowInEasing) else snap()
     val mPillX by animateFloatAsState(targetPos.x, animSpec, label = "mPillX")
     val mPillY by animateFloatAsState(targetPos.y, animSpec, label = "mPillY")
     val mPillW by animateFloatAsState(targetW, animSpec, label = "mPillW")
     val mPillH by animateFloatAsState(targetH, animSpec, label = "mPillH")
-    val mPillAlpha by animateFloatAsState(
-        if (focusedItemKey.value != null) 1f else 0f,
-        if (pillInitialized.value) tween(200) else snap(),
-        label = "mPillAlpha",
-    )
-
-    // Mark initialized after first focus
-    LaunchedEffect(focusedItemKey.value) {
-        if (focusedItemKey.value != null && !pillInitialized.value) {
-            pillInitialized.value = true
-        }
-    }
 
     Dialog(onDismissRequest = onDismiss) {
+        Box(
+            contentAlignment = Alignment.CenterStart,
+        ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.75f)
                 .padding(32.dp)
+                .fillMaxWidth()
                 .onGloballyPositioned { modalParentCoords.value = it }
                 .drawBehind {
                     if (pillVisible && mPillW > 0f) {
                         drawRoundRect(
-                            color = pillColor.copy(alpha = mPillAlpha),
+                            color = pillColor,
                             topLeft = Offset(mPillX, mPillY),
                             size = Size(mPillW, mPillH),
                             cornerRadius = CornerRadius(mPillH / 2f, mPillH / 2f),
@@ -524,7 +526,7 @@ private fun ProfileModal(
                     }
                 },
             horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // User name header
             PlayarrText(
@@ -533,13 +535,13 @@ private fun ProfileModal(
                 color = PlayarrTheme.colors.foreground,
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             menuItems.forEach { item ->
                 if (item.isHeader) {
                     PlayarrText(
                         text = item.label,
-                        style = PlayarrTheme.typography.title.copy(fontWeight = FontWeight.SemiBold),
+                        style = PlayarrTheme.typography.lg.copy(fontWeight = FontWeight.Normal),
                         color = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
                     )
                 } else {
@@ -584,6 +586,7 @@ private fun ProfileModal(
                     }
                 }
             }
+        }
         }
     }
 }
