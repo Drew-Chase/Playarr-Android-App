@@ -4,7 +4,10 @@ import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -33,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -52,8 +56,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Carousel
+import androidx.tv.material3.CarouselState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.rememberCarouselState
@@ -88,6 +94,7 @@ fun HeroCarousel(
     val backgroundColor = PlayarrTheme.colors.background
     val carouselState = rememberCarouselState()
     val carouselHasFocus = remember { mutableStateOf(false) }
+    val autoScrollProgress = remember { Animatable(0f) }
 
     // Refocus More Info button when carousel slide changes while focused
     LaunchedEffect(carouselState.activeItemIndex) {
@@ -98,6 +105,34 @@ fun HeroCarousel(
                 // FocusRequester not yet attached to new slide
             }
         }
+    }
+
+    // Reset progress when slide changes (manual navigation or auto-advance)
+    LaunchedEffect(carouselState.activeItemIndex) {
+        autoScrollProgress.snapTo(0f)
+    }
+
+    // Drive the auto-scroll timer, pausing/resuming based on focus.
+    // Keyed on both activeItemIndex and focus so it restarts on either change.
+    LaunchedEffect(carouselState.activeItemIndex, carouselHasFocus.value) {
+        if (!carouselHasFocus.value) {
+            val remaining = 1f - autoScrollProgress.value
+            if (remaining > 0f) {
+                autoScrollProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        (AUTO_SCROLL_DURATION_MS * remaining).toInt(),
+                        easing = LinearEasing,
+                    ),
+                )
+                // Advance if animation completed (not interrupted by focus/navigation)
+                if (autoScrollProgress.value >= 1f) {
+                    val nextIndex = (carouselState.activeItemIndex + 1) % items.size
+                    carouselState.setActiveIndex(nextIndex)
+                }
+            }
+        }
+        // When focused: do nothing — previous animation was cancelled by LaunchedEffect restart
     }
 
     val carouselButtonFocusModifier = Modifier.focusProperties {
@@ -265,6 +300,7 @@ fun HeroCarousel(
         Carousel(
             itemCount = items.size,
             carouselState = carouselState,
+            autoScrollDurationMillis = Long.MAX_VALUE,
             contentTransformStartToEnd =
                 fadeIn(snap()) togetherWith fadeOut(snap()),
             contentTransformEndToStart =
@@ -295,7 +331,7 @@ fun HeroCarousel(
                 CarouselPillIndicator(
                     itemCount = items.size,
                     activeItemIndex = carouselState.activeItemIndex,
-                    paused = carouselHasFocus.value,
+                    progress = autoScrollProgress.value,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 48.dp, bottom = 16.dp),
@@ -363,50 +399,35 @@ fun HeroCarousel(
 
 private const val AUTO_SCROLL_DURATION_MS = 5000
 
+/** Advance the carousel via reflection since [CarouselState.activeItemIndex] has internal set. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+private fun CarouselState.setActiveIndex(index: Int) {
+    try {
+        val field = javaClass.getDeclaredField("activeItemIndex\$delegate")
+        field.isAccessible = true
+        (field.get(this) as androidx.compose.runtime.MutableIntState).intValue = index
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to set carousel index", e)
+    }
+}
+
 /**
  * Custom carousel indicator with expanded active pill and progress fill.
  * Inactive items are small dots; the active item is a wider pill with
- * a progress bar that fills over the auto-scroll duration.
+ * a progress bar showing the auto-scroll timer.
  */
 @Composable
 private fun CarouselPillIndicator(
     itemCount: Int,
     activeItemIndex: Int,
-    paused: Boolean = false,
+    progress: Float,
     modifier: Modifier = Modifier,
 ) {
     val pillHeight = 8.dp
     val dotSize = 8.dp
     val activePillWidth = 40.dp
-    val progress = remember { Animatable(0f) }
-
-    // Reset and animate progress when active item changes
-    LaunchedEffect(activeItemIndex) {
-        progress.snapTo(0f)
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = AUTO_SCROLL_DURATION_MS,
-                easing = LinearEasing,
-            ),
-        )
-    }
-
-    // Pause/resume: stop animation when focused, resume remaining when unfocused
-    LaunchedEffect(paused) {
-        if (paused) {
-            progress.stop()
-        } else if (progress.value < 1f) {
-            val remaining = 1f - progress.value
-            progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = (AUTO_SCROLL_DURATION_MS * remaining).toInt(),
-                    easing = LinearEasing,
-                ),
-            )
-        }
-    }
+    val transitionSpec = tween<Dp>(300, easing = FastOutSlowInEasing)
+    val alphaTransitionSpec = tween<Float>(300, easing = FastOutSlowInEasing)
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -415,37 +436,37 @@ private fun CarouselPillIndicator(
     ) {
         repeat(itemCount) { index ->
             val isActive = index == activeItemIndex
-            if (isActive) {
-                // Active pill with progress fill
-                Box(
-                    modifier = Modifier
-                        .width(activePillWidth)
-                        .height(pillHeight)
-                        .background(
-                            Color.White.copy(alpha = 0.3f),
-                            RoundedCornerShape(50),
-                        ),
-                ) {
+            val animatedWidth by animateDpAsState(
+                targetValue = if (isActive) activePillWidth else dotSize,
+                animationSpec = transitionSpec,
+                label = "pillWidth",
+            )
+            val animatedAlpha by animateFloatAsState(
+                targetValue = if (isActive) 0.3f else 0.5f,
+                animationSpec = alphaTransitionSpec,
+                label = "pillAlpha",
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(animatedWidth)
+                    .height(pillHeight)
+                    .background(
+                        Color.White.copy(alpha = animatedAlpha),
+                        RoundedCornerShape(50),
+                    ),
+            ) {
+                if (isActive && progress > 0f) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .fillMaxWidth(progress.value)
+                            .fillMaxWidth(progress.coerceIn(0.01f, 1f))
                             .background(
                                 Color.White,
                                 RoundedCornerShape(50),
                             ),
                     )
                 }
-            } else {
-                // Inactive dot
-                Box(
-                    modifier = Modifier
-                        .size(dotSize)
-                        .background(
-                            Color.White.copy(alpha = 0.5f),
-                            CircleShape,
-                        ),
-                )
             }
         }
     }
