@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,10 +23,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -79,6 +85,7 @@ class DashboardScreen {
         val carouselFocusRequester = remember { FocusRequester() }
         val navBarFocusRequester = remember { FocusRequester() }
         val moreInfoFocusRequester = remember { FocusRequester() }
+        val contentFocusRequester = remember { FocusRequester() }
         val lazyListState = rememberLazyListState()
         val carouselFocused = remember { mutableStateOf(false) }
 
@@ -120,6 +127,7 @@ class DashboardScreen {
         }
 
         val scope = rememberCoroutineScope()
+        val focusManager = LocalFocusManager.current
 
         PlayarrTheme {
             val state = dashboardState.value
@@ -157,25 +165,33 @@ class DashboardScreen {
                             "recentMovies=${state.recentMovies().size}, " +
                             "recentShows=${state.recentShows().size}")
 
+                    // Intercept back when scrolled down — focus navbar instead of exiting
+                    val shouldInterceptBack by remember {
+                        derivedStateOf {
+                            (lazyListState.firstVisibleItemIndex > 0
+                                    || lazyListState.firstVisibleItemScrollOffset > 0)
+                                    && !navBarFocused.value
+                        }
+                    }
+                    BackHandler(enabled = shouldInterceptBack) {
+                        navBarFocusRequester.requestFocus()
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .nestedScroll(carouselScrollLock)
                             .onPreviewKeyEvent { keyEvent ->
-                                // Detect intentional D-pad down while carousel has focus
-                                // so the scroll lock allows the resulting BringIntoView scroll
                                 if (keyEvent.key == Key.DirectionDown
                                     && keyEvent.type == KeyEventType.KeyDown
                                     && carouselFocused.value
                                 ) {
                                     dpadDownPressed.value = true
-                                    // Also programmatically scroll to ensure Continue Watching
-                                    // is visible, in case BringIntoView can't find it
                                     scope.launch {
                                         lazyListState.animateScrollToItem(1)
                                     }
                                 }
-                                false // never consume — let the event propagate normally
+                                false
                             }
                             .onFocusChanged { focusState ->
                                 Log.d(TAG, "DashboardScreen(Box): onFocusChanged — " +
@@ -188,6 +204,8 @@ class DashboardScreen {
                             state = lazyListState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .focusRequester(contentFocusRequester)
+                                .focusRestorer()
                                 .onFocusChanged { focusState ->
                                     Log.d(TAG, "DashboardScreen(LazyColumn): onFocusChanged — " +
                                             "isFocused=${focusState.isFocused}, " +
@@ -337,6 +355,25 @@ class DashboardScreen {
                                 .focusRequester(navBarFocusRequester)
                                 .focusProperties {
                                     down = moreInfoFocusRequester
+                                }
+                                .onPreviewKeyEvent { keyEvent ->
+                                    // When scrolled down, intercept D-pad down and focus the
+                                    // LazyColumn directly. focusRestorer() will restore focus
+                                    // to the last focused child, then Enter drills into the
+                                    // MediaRow focusGroup to reach the actual card.
+                                    if (keyEvent.key == Key.DirectionDown
+                                        && keyEvent.type == KeyEventType.KeyDown
+                                    ) {
+                                        val isScrolled = lazyListState.firstVisibleItemIndex > 0
+                                                || lazyListState.firstVisibleItemScrollOffset > 0
+                                        if (isScrolled) {
+                                            contentFocusRequester.requestFocus()
+                                            // Enter the focus groups to reach the actual card
+                                            focusManager.moveFocus(FocusDirection.Enter)
+                                            focusManager.moveFocus(FocusDirection.Enter)
+                                            true
+                                        } else false
+                                    } else false
                                 }
                                 .onFocusChanged {
                                     navBarFocused.value = it.hasFocus

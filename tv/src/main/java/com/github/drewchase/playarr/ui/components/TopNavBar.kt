@@ -141,14 +141,21 @@ fun TopNavBar(
         modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        PlayarrTheme.colors.background.copy(alpha = 0.8f),
-                        Color.Transparent,
-                    )
+            .drawBehind {
+                // Draw a tall gradient that extends well below the navbar row
+                // so content scrolling behind remains readable
+                val gradientHeight = size.height * 2.5f
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.85f),
+                        0.4f to Color.Black.copy(alpha = 0.6f),
+                        1f to Color.Transparent,
+                        startY = 0f,
+                        endY = gradientHeight,
+                    ),
+                    size = size.copy(height = gradientHeight),
                 )
-            )
+            }
             .padding(horizontal = 48.dp)
             .onGloballyPositioned { parentCoords.value = it }
             .onFocusChanged { focusState ->

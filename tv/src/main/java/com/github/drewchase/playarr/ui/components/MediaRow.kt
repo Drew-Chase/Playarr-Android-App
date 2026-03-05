@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.github.drewchase.playarr.ui.theme.PlayarrTheme
@@ -21,6 +23,7 @@ private const val TAG = "PlayarrFocus"
  * Used for "Continue Watching", "Recently Added", etc.
  * Skips rendering entirely if items is empty.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun <T> MediaRow(
     title: String,
@@ -51,6 +54,7 @@ fun <T> MediaRow(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(PlayarrTheme.spacing.xl),
+            modifier = Modifier.focusRestorer(),
         ) {
             items(items) { item ->
                 itemContent(item)
