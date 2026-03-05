@@ -1,6 +1,7 @@
 package com.github.drewchase.playarr.ui.components
 
 import android.util.Log
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -119,6 +120,21 @@ fun TopNavBar(
     val profileScale by animateFloatAsState(
         if (focusedKey.value == "profile" && navBarHasFocus.value) 1.1f else 1f,
         tween(200), label = "profileScale",
+    )
+
+    // Animated content colors — synced with pill animation timing
+    val colorAnimSpec = tween<Color>(300, easing = FastOutSlowInEasing)
+    val searchContentColor by animateColorAsState(
+        if (focusedKey.value == "search" && navBarHasFocus.value)
+            PlayarrTheme.colors.background
+        else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+        colorAnimSpec, label = "searchColor",
+    )
+    val profileContentColor by animateColorAsState(
+        if (focusedKey.value == "profile" && navBarHasFocus.value)
+            PlayarrTheme.colors.background
+        else PlayarrTheme.colors.foreground,
+        colorAnimSpec, label = "profileColor",
     )
 
     Row(
@@ -257,15 +273,16 @@ fun TopNavBar(
                     },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
-                    contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+                    contentColor = searchContentColor,
                     focusedContainerColor = Color.Transparent,
-                    focusedContentColor = PlayarrTheme.colors.background,
+                    focusedContentColor = searchContentColor,
                 ),
                 shape = ButtonDefaults.shape(shape = CircleShape),
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
+                    tint = searchContentColor,
                     modifier = Modifier.size(24.dp),
                 )
             }
@@ -289,9 +306,9 @@ fun TopNavBar(
                     },
                 colors = ButtonDefaults.colors(
                     containerColor = Color.Transparent,
-                    contentColor = PlayarrTheme.colors.foreground,
+                    contentColor = profileContentColor,
                     focusedContainerColor = Color.Transparent,
-                    focusedContentColor = PlayarrTheme.colors.background,
+                    focusedContentColor = profileContentColor,
                 ),
                 shape = ButtonDefaults.shape(shape = CircleShape),
             ) {
@@ -357,6 +374,12 @@ private fun NavButton(
     onFocused: (String) -> Unit,
     onPositioned: (String, LayoutCoordinates) -> Unit,
 ) {
+    // Animate text color in sync with the pill (300ms) instead of Button's instant snap
+    val textColor by animateColorAsState(
+        if (isFocused) PlayarrTheme.colors.background
+        else PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+        tween(300, easing = FastOutSlowInEasing), label = "navTextColor",
+    )
 
     Button(
         onClick = onClick,
@@ -378,15 +401,16 @@ private fun NavButton(
             },
         colors = ButtonDefaults.colors(
             containerColor = Color.Transparent,
-            contentColor = PlayarrTheme.colors.foreground.copy(alpha = 0.7f),
+            contentColor = textColor,
             focusedContainerColor = Color.Transparent,
-            focusedContentColor = PlayarrTheme.colors.background,
+            focusedContentColor = textColor,
         ),
         shape = ButtonDefaults.shape(shape = PlayarrTheme.shapes.button),
     ) {
         PlayarrText(
             text = label,
             style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.Normal),
+            color = textColor,
         )
     }
 }
