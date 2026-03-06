@@ -68,7 +68,7 @@ class DashboardScreen {
     @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class)
     @TvPreviews
     @Composable
-    fun View(onSignOut: () -> Unit = {}) {
+    fun View(onSignOut: () -> Unit = {}, onItemClick: (com.github.drewchase.playarr.commonlib.data.PlexMediaItem) -> Unit = {}) {
         val context = LocalContext.current
         val config = remember { AppConfiguration(context) }
         val client = remember {
@@ -226,8 +226,8 @@ class DashboardScreen {
                                         items = heroItems,
                                         client = client,
                                         imageLoader = imageLoader,
-                                        onPlayClick = { /* TODO: navigate to player */ },
-                                        onInfoClick = { /* TODO: navigate to detail */ },
+                                        onPlayClick = { item -> onItemClick(item) },
+                                        onInfoClick = { item -> onItemClick(item) },
                                         modifier = Modifier
                                             .focusRequester(carouselFocusRequester)
                                             .focusProperties {
@@ -254,7 +254,7 @@ class DashboardScreen {
                                                 item = mediaItem,
                                                 client = client,
                                                 imageLoader = imageLoader,
-                                                onClick = { /* TODO: navigate to player */ },
+                                                onClick = { onItemClick(mediaItem) },
                                             )
                                         }
                                     }
@@ -272,7 +272,7 @@ class DashboardScreen {
                                                 item = mediaItem,
                                                 client = client,
                                                 imageLoader = imageLoader,
-                                                onClick = { /* TODO: navigate to detail */ },
+                                                onClick = { onItemClick(mediaItem) },
                                             )
                                         }
                                     }
@@ -290,7 +290,7 @@ class DashboardScreen {
                                                 item = mediaItem,
                                                 client = client,
                                                 imageLoader = imageLoader,
-                                                onClick = { /* TODO: navigate to detail */ },
+                                                onClick = { onItemClick(mediaItem) },
                                             )
                                         }
                                     }
@@ -393,7 +393,7 @@ class DashboardScreen {
                                 client = client,
                                 imageLoader = imageLoader,
                                 onDismiss = { showSearch.value = false },
-                                onItemClick = { /* TODO: navigate to detail */ },
+                                onItemClick = { item -> onItemClick(item) },
                             )
                         }
                     }

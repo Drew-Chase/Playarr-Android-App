@@ -30,6 +30,11 @@ data class PlexMediaItem(
     @SerializedName("leafCount") val leafCount: Int? = null,
     @SerializedName("childCount") val childCount: Int? = null,
     @SerializedName("Guid") val guid: List<GuidEntry>? = null,
+    @SerializedName("Role") val roles: List<PlexRole>? = null,
+    @SerializedName("Director") val directors: List<PlexTag>? = null,
+    @SerializedName("Writer") val writers: List<PlexTag>? = null,
+    @SerializedName("Genre") val genres: List<PlexTag>? = null,
+    @SerializedName("Media") val media: List<PlexMedia>? = null,
 ) {
     data class GuidEntry(val id: String)
 
@@ -56,5 +61,30 @@ data class PlexMediaItem(
         val s = parentIndex ?: return null
         val e = index ?: return null
         return "S${s.toString().padStart(2, '0')} E${e.toString().padStart(2, '0')}"
+    }
+
+    fun resolutionLabel(): String? {
+        val h = media?.firstOrNull()?.height ?: return null
+        return when {
+            h >= 2160 -> "4K"
+            h >= 1080 -> "1080p"
+            h >= 720 -> "720p"
+            h >= 480 -> "480p"
+            else -> "${h}p"
+        }
+    }
+
+    fun audioLabel(): String? {
+        val m = media?.firstOrNull() ?: return null
+        val audioStream = m.parts?.firstOrNull()?.streams?.find { it.streamType == 2 }
+        if (audioStream?.displayTitle != null) return audioStream.displayTitle
+        val codec = m.audioCodec?.uppercase() ?: return null
+        val channels = m.audioChannels
+        return when {
+            channels != null && channels >= 8 -> "7.1 $codec"
+            channels != null && channels >= 6 -> "5.1 $codec"
+            channels != null && channels >= 2 -> "Stereo $codec"
+            else -> codec
+        }
     }
 }

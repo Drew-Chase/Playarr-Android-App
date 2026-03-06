@@ -112,6 +112,28 @@ class PlayarrClient(
         return getList("/api/plex/users")
     }
 
+    // -- Media detail endpoints --
+
+    fun getMediaDetail(ratingKey: String): PlexMediaItem {
+        return get("/api/media/$ratingKey", PlexMediaItem::class.java)
+    }
+
+    fun getMediaChildren(ratingKey: String): List<PlexMediaItem> {
+        return getList("/api/media/$ratingKey/children")
+    }
+
+    fun getRelatedMedia(ratingKey: String): List<PlexMediaItem> {
+        return getList("/api/media/$ratingKey/related")
+    }
+
+    fun getOnDeckForMedia(ratingKey: String): PlexMediaItem? {
+        return try {
+            get("/api/media/$ratingKey/onDeck", PlexMediaItem::class.java)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     // -- Image URL builders --
 
     fun getThumbUrl(ratingKey: String): String {
