@@ -63,7 +63,6 @@ class WelcomeScreen(private val onSetupComplete: (() -> Unit)? = null) {
         val plexAuth = remember { PlexAuthClient(config.plexClientId) }
 
         val pinCode = remember { mutableStateOf<String?>(null) }
-        val pinId = remember { mutableStateOf<Long?>(null) }
         val pinError = remember { mutableStateOf<String?>(null) }
 
         // Start web server and wire up the setup complete callback
@@ -79,24 +78,23 @@ class WelcomeScreen(private val onSetupComplete: (() -> Unit)? = null) {
             }
         }
 
-        // Create Plex PIN and poll for authorization
+        // Create Plex PIN for display on TV and web page
         LaunchedEffect(Unit) {
             withContext(Dispatchers.IO) {
                 try {
                     val pin = plexAuth.createPin()
                     pinCode.value = pin.code
-                    pinId.value = pin.id
 
                     // Share PIN with the web frontend via the setup server
                     setupServer.pinCode = pin.code
                     setupServer.pinId = pin.id
 
-                    // Poll every 2 seconds until the user authorizes
-                    while (isActive && pinId.value != null) {
+                    // Poll until claimed (visual feedback only —
+                    // actual token storage happens via the web page's /api/setup call)
+                    while (isActive) {
                         delay(2000)
-                        val status = plexAuth.checkPin(pinId.value!!)
+                        val status = plexAuth.checkPin(pin.id)
                         if (!status.authToken.isNullOrEmpty()) {
-                            config.authToken = status.authToken
                             break
                         }
                     }

@@ -142,7 +142,8 @@ serverUrlInput.addEventListener("input", () => {
     }
 });
 
-// Complete button submits setup with validation
+// Complete button submits setup with the raw token — the TV's SetupServer
+// resolves it into the composite format the Playarr server expects.
 completeButton.addEventListener("click", async () => {
     const serverUrl = serverUrlInput.value.trim();
     errorMessageEl.textContent = "";

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -161,23 +162,6 @@ fun WatchPartyModal(
                             color = PlayarrTheme.colors.foreground,
                         )
                     }
-
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.colors(
-                            containerColor = Color.Transparent,
-                            contentColor = PlayarrTheme.colors.foreground,
-                            focusedContainerColor = PlayarrTheme.colors.content3,
-                            focusedContentColor = PlayarrTheme.colors.foreground,
-                        ),
-                        shape = ButtonDefaults.shape(shape = CircleShape),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -229,7 +213,7 @@ fun WatchPartyModal(
                         ) {
                             PlayarrText(
                                 text = if (tab == WatchPartyTab.CREATE) "Create" else "Join",
-                                style = PlayarrTheme.typography.lg.copy(fontWeight = FontWeight.SemiBold),
+                                style = PlayarrTheme.typography.body.copy(fontWeight = FontWeight.SemiBold),
                                 color = tabTextColor,
                             )
                         }
@@ -345,7 +329,7 @@ private fun CreateWatchPartyContent(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PlayarrText(
                 text = "Who can join?",
-                style = PlayarrTheme.typography.lg.copy(fontWeight = FontWeight.SemiBold),
+                style = PlayarrTheme.typography.base.copy(fontWeight = FontWeight.SemiBold),
                 color = PlayarrTheme.colors.foreground,
             )
 
@@ -437,20 +421,106 @@ private fun CreateWatchPartyContent(
 
         // User picker when "Select Users" is selected
         if (selectedOption.value == 2) {
-            UserPickerSection(
-                users = users.value,
-                isLoading = usersLoading.value,
-                selectedUserIds = selectedUserIds,
-                filter = userFilter.value,
-                onFilterChange = { userFilter.value = it },
-                onToggleUser = { userId ->
-                    if (selectedUserIds.contains(userId)) {
-                        selectedUserIds.remove(userId)
-                    } else {
-                        selectedUserIds.add(userId)
+            val showUserPicker = remember { mutableStateOf(false) }
+
+            // Selected user avatar pills
+            if (selectedUserIds.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(
+                        users.value.filter { selectedUserIds.contains(it.id) },
+                        key = { it.id },
+                    ) { user ->
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    PlayarrTheme.colors.content2,
+                                    RoundedCornerShape(20.dp),
+                                )
+                                .border(
+                                    1.dp,
+                                    PlayarrTheme.colors.foreground.copy(alpha = 0.1f),
+                                    RoundedCornerShape(20.dp),
+                                )
+                                .padding(start = 4.dp, top = 4.dp, bottom = 4.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(PlayarrTheme.colors.content3, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                PlayarrText(
+                                    text = (user.title.ifBlank { user.username })
+                                        .take(1).uppercase(),
+                                    style = PlayarrTheme.typography.sm.copy(
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                    color = PlayarrTheme.colors.primary,
+                                )
+                            }
+                            PlayarrText(
+                                text = user.title.ifBlank { user.username },
+                                style = PlayarrTheme.typography.sm,
+                                color = PlayarrTheme.colors.foreground,
+                            )
+                        }
                     }
-                },
-            )
+                }
+            }
+
+            // "Select Users" button
+            Button(
+                onClick = { showUserPicker.value = true },
+                colors = ButtonDefaults.colors(
+                    containerColor = PlayarrTheme.colors.content2,
+                    contentColor = PlayarrTheme.colors.foreground,
+                    focusedContainerColor = PlayarrTheme.colors.content3,
+                    focusedContentColor = PlayarrTheme.colors.foreground,
+                ),
+                shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = PlayarrTheme.colors.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    PlayarrText(
+                        text = if (selectedUserIds.isEmpty()) "Select Users"
+                        else "${selectedUserIds.size} user${if (selectedUserIds.size != 1) "s" else ""} selected",
+                        style = PlayarrTheme.typography.base,
+                        color = PlayarrTheme.colors.foreground,
+                    )
+                }
+            }
+
+            // User picker dialog
+            if (showUserPicker.value) {
+                UserPickerDialog(
+                    users = users.value,
+                    isLoading = usersLoading.value,
+                    selectedUserIds = selectedUserIds,
+                    filter = userFilter.value,
+                    onFilterChange = { userFilter.value = it },
+                    onToggleUser = { userId ->
+                        if (selectedUserIds.contains(userId)) {
+                            selectedUserIds.remove(userId)
+                        } else {
+                            selectedUserIds.add(userId)
+                        }
+                    },
+                    onDismiss = { showUserPicker.value = false },
+                )
+            }
         }
 
         // Error message
@@ -590,6 +660,108 @@ private fun InviteCodeScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
+private fun UserPickerDialog(
+    users: List<PlexServerUser>,
+    isLoading: Boolean,
+    selectedUserIds: List<Long>,
+    filter: String,
+    onFilterChange: (String) -> Unit,
+    onToggleUser: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        PlayarrTheme.colors.content1,
+                        RoundedCornerShape(12.dp),
+                    )
+                    .padding(24.dp),
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = PlayarrTheme.colors.primary,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        PlayarrText(
+                            text = "Select Users",
+                            style = PlayarrTheme.typography.title.copy(
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = PlayarrTheme.colors.foreground,
+                        )
+                    }
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color.Transparent,
+                            contentColor = PlayarrTheme.colors.foreground,
+                            focusedContainerColor = PlayarrTheme.colors.content3,
+                            focusedContentColor = PlayarrTheme.colors.foreground,
+                        ),
+                        shape = ButtonDefaults.shape(shape = CircleShape),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                UserPickerSection(
+                    users = users,
+                    isLoading = isLoading,
+                    selectedUserIds = selectedUserIds,
+                    filter = filter,
+                    onFilterChange = onFilterChange,
+                    onToggleUser = onToggleUser,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Done button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    PlayarrButton(
+                        onClick = onDismiss,
+                        isPrimary = true,
+                    ) {
+                        PlayarrText(
+                            text = "Done",
+                            style = PlayarrTheme.typography.base.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
 private fun UserPickerSection(
     users: List<PlexServerUser>,
     isLoading: Boolean,
@@ -652,7 +824,7 @@ private fun UserPickerSection(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp),
+                        .height(300.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     items(filtered, key = { it.id }) { user ->

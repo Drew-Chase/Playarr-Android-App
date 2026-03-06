@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(project(":commonlib"))
+    implementation(libs.okhttp)
     implementation(libs.nanohttpd)
     implementation(libs.core)
     implementation(libs.coil.compose)
